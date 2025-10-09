@@ -2,19 +2,23 @@
 
 A Rust client for [Supabase Realtime](https://supabase.com/docs/guides/realtime) - Phoenix Channels WebSocket protocol implementation.
 
-> ⚠️ **Work in Progress** - This is a starter boilerplate. Core WebSocket functionality is not yet implemented.
+> ⚠️ **Work in Progress** - Core WebSocket connection and heartbeat are working! Message routing and channels coming next.
 
-## Features (Planned)
+## Features
 
 - ✅ Type-safe error handling with `thiserror`
 - ✅ Async/await with Tokio
 - ✅ WebSocket support with `tokio-tungstenite`
+- ✅ Connection management (connect/disconnect)
+- ✅ Concurrent read/write tasks
+- ✅ Heartbeat mechanism with timeout detection
+- ✅ Message serialization/deserialization
+- 🚧 Message routing and parsing (in progress)
 - ⏳ Channel subscriptions
 - ⏳ Real-time Postgres changes
 - ⏳ Presence tracking
 - ⏳ Broadcast messages
 - ⏳ Automatic reconnection with exponential backoff
-- ⏳ Heartbeat mechanism
 
 ## Installation
 
@@ -51,9 +55,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Examples
 
-Run the basic example:
+Run the examples:
 
 ```bash
+# Basic connection test
+cargo run --example test_connection
+
+# Heartbeat mechanism test
+cargo run --example test_heartbeat
+
+# Basic usage example (requires Supabase project)
 cargo run --example basic
 ```
 
@@ -77,19 +88,21 @@ src/
 
 ## Development Roadmap
 
-### Phase 1: Core Infrastructure ✅
+### Phase 1: Core Infrastructure ✅ COMPLETE
 - [x] Project setup
 - [x] Type definitions
 - [x] Error handling
 - [x] Basic client structure
 
-### Phase 2: WebSocket Implementation (Next)
-- [ ] WebSocket connection
-- [ ] Message serialization/deserialization
-- [ ] Connection state management
-- [ ] Heartbeat mechanism
+### Phase 2: WebSocket Implementation ✅ MOSTLY COMPLETE
+- [x] WebSocket connection (tokio-tungstenite)
+- [x] Connection state management
+- [x] Concurrent read/write tasks
+- [x] Message serialization/deserialization (serde_json)
+- [x] Heartbeat mechanism with timeout
+- [ ] 🚧 **Next**: Message routing and parsing
 
-### Phase 3: Channels
+### Phase 3: Channels (Next)
 - [ ] Channel join/leave
 - [ ] Event listeners
 - [ ] Push/receive messages
@@ -102,10 +115,12 @@ src/
 - [ ] Access token refresh
 
 ### Phase 5: Testing & Polish
+- [x] Basic connection tests
+- [x] Heartbeat tests
 - [ ] Unit tests
 - [ ] Integration tests
 - [ ] Documentation
-- [ ] Examples
+- [ ] More examples
 
 ## Porting from TypeScript
 
