@@ -126,11 +126,30 @@ impl RealtimeClient {
         }
 
         *state = ConnectionState::Closing;
+        drop(state);
+        tracing::info!("Disconnecting from WebSocket server");
 
-        // TODO: Implement WebSocket disconnection
+        {
+            let mut write_tx = self.write_tx.write().await;
+            *write_tx = None;
+        }
 
-        *state = ConnectionState::Closed;
+        {
+            let mut read_task = self.read_task.write().await;
+            if let Some(task) = read_task.take() {
+                task.abort();
+            }
+        }
 
+        {
+            let mut write_task = self.write_task.write().await;
+            if let Some(task) = write_task.take() {
+                task.abort();
+            }
+        }
+
+        *self.state.write().await = ConnectionState::Closed;
+        tracing::info!("Disconnected from WebSocket server");
         Ok(())
     }
 
@@ -164,8 +183,15 @@ impl RealtimeClient {
             return Err(RealtimeError::NotConnected);
         }
 
-        // TODO: Implement message pushing through WebSocket
-        tracing::debug!("Pushing message: {:?}", message);
+        let tx = self.write_tx.read().await;
+        let tx = tx.as_ref().ok_or(RealtimeError::NotConnected)?;
+
+        let json= serde_json::to_string(&message)?;
+
+        let ws_message = Message::Text(json.into());
+
+        tx.send(ws_message).await  .map_err(|e| RealtimeError::Connection(format!("Failed to send message: {}", e)))?;
+        tracing::debug!("Pushed message: {:?}", message);
 
         Ok(())
     }
