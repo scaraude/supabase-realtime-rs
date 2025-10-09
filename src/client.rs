@@ -268,28 +268,4 @@ impl RealtimeClient {
 
         Ok(())
     }
-
-    async fn send_heartbeat(&self) -> Result<()> {
-        let pending_ref = self.pending_heartbeat_ref.read().await;
-        if pending_ref.is_some() {
-            tracing::warn!("Previous heartbeat not acknowledged, skipping new heartbeat");
-            drop(pending_ref);
-            self.disconnect().await?;
-            return Err(RealtimeError::Timeout);
-        }
-        drop(pending_ref);
-
-        let heartbeat_ref = self.make_ref().await;
-        *self.pending_heartbeat_ref.write().await = Some(heartbeat_ref.clone());
-        let heartbeat_message = RealtimeMessage {
-            topic: "phoenix".to_string(),
-            event: "heartbeat".to_string(),
-            payload: serde_json::json!({}),
-            r#ref: Some(heartbeat_ref.clone()),
-            join_ref: None,
-        };
-        self.push(heartbeat_message).await?;
-        tracing::debug!("Sent heartbeat with ref {}", heartbeat_ref);
-        Ok(())
-    }
 }
