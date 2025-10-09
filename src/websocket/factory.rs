@@ -1,13 +1,15 @@
-use tokio_tungstenite::tungstenite::Error as WsError;
+use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream as TungsteniteStream};
+use tokio::net::TcpStream;
+use crate::types::error::Result;
 
-/// WebSocket factory for creating WebSocket connections
 pub struct WebSocketFactory;
 
 impl WebSocketFactory {
     /// Create a new WebSocket connection
-    pub async fn create(url: &str) -> Result<(), WsError> {
+    pub async fn create(url: String) -> Result<TungsteniteStream<MaybeTlsStream<TcpStream>>> {
         // TODO: Implement WebSocket connection creation
         tracing::debug!("Creating WebSocket connection to: {}", url);
-        Ok(())
+        let (ws_stream, _) = connect_async(url).await?;
+        Ok(ws_stream)
     }
 }
