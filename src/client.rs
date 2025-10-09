@@ -210,6 +210,15 @@ impl RealtimeClient {
             }
         }
 
+        {
+            let mut heartbeat_task = self.heartbeat_task.write().await;
+            if let Some(task) = heartbeat_task.take() {
+                task.abort();
+            }
+            let mut pending_heartbeat_ref = self.pending_heartbeat_ref.write().await;
+            *pending_heartbeat_ref = None;
+        }
+
         *self.state.write().await = ConnectionState::Closed;
         tracing::info!("Disconnected from WebSocket server");
         Ok(())
