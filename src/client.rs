@@ -3,11 +3,9 @@ use crate::websocket::WebSocketFactory;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use url::Url;
-use futures::stream::SplitSink;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
-use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::Message};
-use tokio::net::TcpStream;
+use tokio_tungstenite::tungstenite::Message;
 use futures::stream::StreamExt;
 use futures::sink::SinkExt;
 
@@ -113,7 +111,7 @@ impl RealtimeClient {
 
         *self.state.write().await = ConnectionState::Open;
 
-            tracing::info!("Connected to WebSocket server");
+        tracing::info!("Connected to WebSocket server");
         Ok(())
     }
 
