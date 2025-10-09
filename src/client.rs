@@ -3,6 +3,13 @@ use crate::websocket::WebSocketFactory;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use url::Url;
+use futures::stream::SplitSink;
+use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::Message};
+use tokio::net::TcpStream;
+use futures::stream::StreamExt;
+use futures::sink::SinkExt;
 
 #[derive(Debug, Clone)]
 pub struct RealtimeClientOptions {
@@ -28,6 +35,9 @@ pub struct RealtimeClient {
     options: RealtimeClientOptions,
     state: Arc<RwLock<ConnectionState>>,
     ref_counter: Arc<RwLock<u64>>,
+    write_tx: Arc<RwLock<Option<mpsc::Sender<Message>>>>,
+    read_task: Arc<RwLock<Option<JoinHandle<()>>>>,
+    write_task: Arc<RwLock<Option<JoinHandle<()>>>>,
 }
 
 impl RealtimeClient {
@@ -44,6 +54,9 @@ impl RealtimeClient {
             options,
             state: Arc::new(RwLock::new(ConnectionState::Closed)),
             ref_counter: Arc::new(RwLock::new(0)),
+            write_tx: Arc::new(RwLock::new(None)),
+            read_task: Arc::new(RwLock::new(None)),
+            write_task: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -56,17 +69,51 @@ impl RealtimeClient {
         }
 
         *state = ConnectionState::Connecting;
-
+        drop(state);
         // Build WebSocket URL with query parameters
         let url = self.build_endpoint_url()?;
-
         tracing::info!("Connecting to {}", url);
 
-        // TODO: Implement WebSocket connection
-        // This is a placeholder for the actual WebSocket connection logic
+        // Create WebSocket connection
+        let ws_stream = WebSocketFactory::create(url).await?;
+        let (write_half, mut read_half) = ws_stream.split();
 
-        *state = ConnectionState::Open;
+        let (tx, mut rx) = mpsc::channel::<Message>(100);
 
+        let read_task = tokio::spawn(async move {
+            while let Some(msg_result) = read_half.next().await {
+                match msg_result {
+                    Ok(msg) => {
+                        tracing::debug!("Received message: {:?}", msg);
+                        // Handle incoming messages here
+                    }
+                    Err(e) => {
+                        tracing::error!("WebSocket read error: {}", e);
+                        break;
+                    }
+                }
+            }
+            tracing::info!("Read task finished");
+        });
+
+        let write_task = tokio::spawn(async move {
+            let mut write_half = write_half;
+            while let Some(msg) = rx.recv().await {
+                if let Err(e) = write_half.send(msg).await {
+                    tracing::error!("WebSocket write error: {}", e);
+                    break;
+                }
+            }
+            tracing::info!("Write task finished");
+        });
+
+        *self.write_tx.write().await = Some(tx);
+        *self.read_task.write().await = Some(read_task);
+        *self.write_task.write().await = Some(write_task);
+
+        *self.state.write().await = ConnectionState::Open;
+
+            tracing::info!("Connected to WebSocket server");
         Ok(())
     }
 
