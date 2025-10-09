@@ -1,11 +1,11 @@
-//! # Realtime Rust
+//! # Supabase Realtime Rust
 //!
-//! A Rust client for Supabase Realtime (Phoenix Channels WebSocket protocol).
+//! An unofficial Rust client for Supabase Realtime (Phoenix Channels WebSocket protocol).
 //!
 //! ## Example
 //!
 //! ```no_run
-//! use realtime_rust::{RealtimeClient, RealtimeClientOptions};
+//! use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {

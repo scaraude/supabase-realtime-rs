@@ -1,4 +1,4 @@
-use realtime_rust::{RealtimeClient, RealtimeClientOptions};
+use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
 use std::time::Duration;
 
 #[tokio::main]

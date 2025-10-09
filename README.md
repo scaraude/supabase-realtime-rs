@@ -1,8 +1,10 @@
-# Realtime Rust 🦀
+# Supabase Realtime Rust 🦀
 
 A Rust client for [Supabase Realtime](https://supabase.com/docs/guides/realtime) - Phoenix Channels WebSocket protocol implementation.
 
 > ⚠️ **Work in Progress** - Core WebSocket connection and heartbeat are working! Message routing and channels coming next.
+
+> **Note**: This is an unofficial, community-maintained client. For official clients, see [supabase-community](https://github.com/supabase-community).
 
 ## Features
 
@@ -26,13 +28,20 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-realtime-rust = { path = "../realtime-rust" }
+supabase-realtime-rs = { git = "https://github.com/Scaraude/supabase-realtime-rs" }
+```
+
+Or for local development:
+
+```toml
+[dependencies]
+supabase-realtime-rs = { path = "../supabase-realtime-rs" }
 ```
 
 ## Usage
 
 ```rust
-use realtime_rust::{RealtimeClient, RealtimeClientOptions};
+use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
