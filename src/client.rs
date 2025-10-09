@@ -1,13 +1,13 @@
-use crate::types::{RealtimeError, RealtimeMessage, Result, ConnectionState};
+use crate::types::{ConnectionState, RealtimeError, RealtimeMessage, Result};
 use crate::websocket::WebSocketFactory;
+use futures::sink::SinkExt;
+use futures::stream::StreamExt;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use url::Url;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio_tungstenite::tungstenite::Message;
-use futures::stream::StreamExt;
-use futures::sink::SinkExt;
+use url::Url;
 
 #[derive(Debug, Clone)]
 pub struct RealtimeClientOptions {
@@ -33,9 +33,13 @@ pub struct RealtimeClient {
     options: RealtimeClientOptions,
     state: Arc<RwLock<ConnectionState>>,
     ref_counter: Arc<RwLock<u64>>,
+
     write_tx: Arc<RwLock<Option<mpsc::Sender<Message>>>>,
     read_task: Arc<RwLock<Option<JoinHandle<()>>>>,
     write_task: Arc<RwLock<Option<JoinHandle<()>>>>,
+
+    pending_heartbeat_ref: Arc<RwLock<Option<String>>>,
+    heartbeat_task: Arc<RwLock<Option<JoinHandle<()>>>>,
 }
 
 impl RealtimeClient {
@@ -52,9 +56,13 @@ impl RealtimeClient {
             options,
             state: Arc::new(RwLock::new(ConnectionState::Closed)),
             ref_counter: Arc::new(RwLock::new(0)),
+
             write_tx: Arc::new(RwLock::new(None)),
             read_task: Arc::new(RwLock::new(None)),
             write_task: Arc::new(RwLock::new(None)),
+
+            pending_heartbeat_ref: Arc::new(RwLock::new(None)),
+            heartbeat_task: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -108,6 +116,62 @@ impl RealtimeClient {
         *self.write_tx.write().await = Some(tx);
         *self.read_task.write().await = Some(read_task);
         *self.write_task.write().await = Some(write_task);
+
+        let heartbeat_interval = self.options.heartbeat_interval.unwrap_or(25_000);
+        // Clone the Arc references we need
+        let pending_ref = Arc::clone(&self.pending_heartbeat_ref);
+        let write_tx = Arc::clone(&self.write_tx);
+        let ref_counter = Arc::clone(&self.ref_counter);
+        let state = Arc::clone(&self.state);
+
+        let heartbeat_task = tokio::spawn(async move {
+            let mut interval =
+                tokio::time::interval(std::time::Duration::from_millis(heartbeat_interval));
+            loop {
+                interval.tick().await;
+                if *state.read().await != ConnectionState::Open {
+                    break;
+                }
+
+                let pending = pending_ref.read().await;
+                if pending.is_some() {
+                    tracing::warn!("Heartbeat timeout - server not responding");
+                    break;
+                }
+                drop(pending);
+
+                let mut counter = ref_counter.write().await;
+                *counter += 1;
+                let heartbeat_ref = counter.to_string();
+                drop(counter);
+
+                *pending_ref.write().await = Some(heartbeat_ref.clone());
+
+                let tx_guard = write_tx.read().await;
+                if let Some(tx) = tx_guard.as_ref() {
+                    let heartbeat_message = RealtimeMessage {
+                        topic: "phoenix".to_string(),
+                        event: "heartbeat".to_string(),
+                        payload: serde_json::json!({}),
+                        r#ref: Some(heartbeat_ref.clone()),
+                        join_ref: None,
+                    };
+                    let json = serde_json::to_string(&heartbeat_message).unwrap();
+                    let ws_message = Message::Text(json.into());
+
+                    if tx.send(ws_message).await.is_err() {
+                        tracing::error!("Failed to send heartbeat message");
+                        break;
+                    }
+                    tracing::debug!("Sent heartbeat with ref {}", heartbeat_ref);
+                } else {
+                    break;
+                }
+            }
+            tracing::info!("Heartbeat task finished");
+        });
+
+        *self.heartbeat_task.write().await = Some(heartbeat_task);
 
         *self.state.write().await = ConnectionState::Open;
 
@@ -184,13 +248,39 @@ impl RealtimeClient {
         let tx = self.write_tx.read().await;
         let tx = tx.as_ref().ok_or(RealtimeError::NotConnected)?;
 
-        let json= serde_json::to_string(&message)?;
+        let json = serde_json::to_string(&message)?;
 
         let ws_message = Message::Text(json.into());
 
-        tx.send(ws_message).await  .map_err(|e| RealtimeError::Connection(format!("Failed to send message: {}", e)))?;
+        tx.send(ws_message)
+            .await
+            .map_err(|e| RealtimeError::Connection(format!("Failed to send message: {}", e)))?;
         tracing::debug!("Pushed message: {:?}", message);
 
+        Ok(())
+    }
+
+    async fn send_heartbeat(&self) -> Result<()> {
+        let pending_ref = self.pending_heartbeat_ref.read().await;
+        if pending_ref.is_some() {
+            tracing::warn!("Previous heartbeat not acknowledged, skipping new heartbeat");
+            drop(pending_ref);
+            self.disconnect().await?;
+            return Err(RealtimeError::Timeout);
+        }
+        drop(pending_ref);
+
+        let heartbeat_ref = self.make_ref().await;
+        *self.pending_heartbeat_ref.write().await = Some(heartbeat_ref.clone());
+        let heartbeat_message = RealtimeMessage {
+            topic: "phoenix".to_string(),
+            event: "heartbeat".to_string(),
+            payload: serde_json::json!({}),
+            r#ref: Some(heartbeat_ref.clone()),
+            join_ref: None,
+        };
+        self.push(heartbeat_message).await?;
+        tracing::debug!("Sent heartbeat with ref {}", heartbeat_ref);
         Ok(())
     }
 }
