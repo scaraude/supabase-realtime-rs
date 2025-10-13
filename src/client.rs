@@ -339,4 +339,20 @@ impl RealtimeClient {
 
         Ok(())
     }
+
+    pub fn http_endpoint(&self) -> Result<String> {
+        let url = self
+            .endpoint
+            .replace("ws://", "http://")
+            .replace("wss://", "https://");
+        Ok(url.split('?').next().unwrap_or(&url).to_string())
+    }
+
+    pub fn api_key(&self) -> &str {
+        &self.options.api_key
+    }
+
+    pub fn access_token(&self) -> Option<&str> {
+        self.options.access_token.as_deref()
+    }
 }

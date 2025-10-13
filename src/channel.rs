@@ -1,6 +1,6 @@
-use crate::RealtimeMessage;
 use crate::client::RealtimeClient;
 use crate::types::{ChannelState, Result};
+use crate::{RealtimeError, RealtimeMessage};
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc};
 
@@ -87,6 +87,47 @@ impl RealtimeChannel {
         Ok(())
     }
 
+    pub async fn send_http(&self, event: &str, payload: serde_json::Value) -> Result<()> {
+        let endpoint = self.client.http_endpoint()?;
+        let url = format!("{}/api/broadcast", endpoint);
+
+        let body = serde_json::json!({
+            "messages": [{
+                "topic": self.topic,
+                "event": event,
+                "payload": payload,
+                "private": self.options.is_private,
+            }]
+        });
+
+        let api_key = self.client.api_key();
+        let access_token = self.client.access_token();
+
+        let http_client = reqwest::Client::new();
+        let mut request = http_client
+            .post(&url)
+            .header("Content_Type", "application/json")
+            .header("apiKey", api_key)
+            .json(&body);
+        if let Some(token) = access_token {
+            request = request.header("Authorization", format!("Bearer {}", token));
+        }
+
+        let response = request
+            .send()
+            .await
+            .map_err(|e| RealtimeError::Connection(format!("HTTP broadcast failed: {}", e)))?;
+        if !response.status().is_success() {
+            return Err(RealtimeError::Connection(format!(
+                "HTTP broadcast failed with status: {}",
+                response.status()
+            )));
+        }
+
+        tracing::debug!("Sent broadcast via HTTP: {}", event);
+        Ok(())
+    }
+
     /// Unsubscribe from the channel
     pub async fn unsubscribe(&self) -> Result<()> {
         let mut state = self.state.write().await;
@@ -111,6 +152,29 @@ impl RealtimeChannel {
         *self.state.write().await = ChannelState::Closed;
 
         Ok(())
+    }
+
+    pub async fn send(&self, event: &str, payload: serde_json::Value) -> Result<()> {
+        let is_joined = {
+            let state = self.state.read().await;
+            *state == ChannelState::Joined
+        };
+
+        let is_connected = self.client.is_connected().await;
+
+        if is_joined && is_connected {
+            let message = RealtimeMessage::new(
+                self.topic.clone(),
+                format!("broadcast:{}", event),
+                serde_json::json!({ "type": "broadcast", "event": event, "payload": payload }),
+            );
+
+            self.client.push(message).await?;
+            tracing::debug!("Sent broadcast via WebSocket: {}", event);
+            Ok(())
+        } else {
+            self.send_http(event, payload).await
+        }
     }
 
     pub fn topic(&self) -> &str {
