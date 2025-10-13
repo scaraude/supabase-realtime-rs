@@ -86,12 +86,41 @@ impl RealtimeClient {
 
         let (tx, mut rx) = mpsc::channel::<Message>(100);
 
+        let pending_heartbeat_ref = Arc::clone(&self.pending_heartbeat_ref);
+
         let read_task = tokio::spawn(async move {
             while let Some(msg_result) = read_half.next().await {
                 match msg_result {
                     Ok(msg) => {
                         tracing::debug!("Received message: {:?}", msg);
-                        // Handle incoming messages here
+                        if let Message::Text(text) = msg {
+                            match serde_json::from_str::<RealtimeMessage>(&text) {
+                                Ok(realtime_msg) => {
+                                    // Handle heartbeat response
+                                    if realtime_msg.topic == "phoenix"
+                                        && (realtime_msg.event == "phx_reply"
+                                            || realtime_msg.event == "heartbeat")
+                                    // TODO: remove for supabase application
+                                    {
+                                        if let Some(ref msg_ref) = realtime_msg.r#ref {
+                                            let pending = pending_heartbeat_ref.read().await;
+                                            if pending.as_ref() == Some(msg_ref) {
+                                                drop(pending);
+                                                *pending_heartbeat_ref.write().await = None;
+                                                tracing::debug!(
+                                                    "Received heartbeat ack for ref {}",
+                                                    msg_ref
+                                                );
+                                            }
+                                        }
+                                    }
+                                    //TODO: route other messages to channels
+                                }
+                                Err(e) => {
+                                    tracing::error!("Failed to parse message: {}", e);
+                                }
+                            }
+                        }
                     }
                     Err(e) => {
                         tracing::error!("WebSocket read error: {}", e);
@@ -119,7 +148,7 @@ impl RealtimeClient {
 
         let heartbeat_interval = self.options.heartbeat_interval.unwrap_or(25_000);
         // Clone the Arc references we need
-        let pending_ref = Arc::clone(&self.pending_heartbeat_ref);
+        let pending_heartbeat_ref = Arc::clone(&self.pending_heartbeat_ref);
         let write_tx = Arc::clone(&self.write_tx);
         let ref_counter = Arc::clone(&self.ref_counter);
         let state = Arc::clone(&self.state);
@@ -133,7 +162,7 @@ impl RealtimeClient {
                     break;
                 }
 
-                let pending = pending_ref.read().await;
+                let pending = pending_heartbeat_ref.read().await;
                 if pending.is_some() {
                     tracing::warn!("Heartbeat timeout - server not responding");
                     break;
@@ -145,7 +174,7 @@ impl RealtimeClient {
                 let heartbeat_ref = counter.to_string();
                 drop(counter);
 
-                *pending_ref.write().await = Some(heartbeat_ref.clone());
+                *pending_heartbeat_ref.write().await = Some(heartbeat_ref.clone());
 
                 let tx_guard = write_tx.read().await;
                 if let Some(tx) = tx_guard.as_ref() {
