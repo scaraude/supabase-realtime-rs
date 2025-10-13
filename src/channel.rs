@@ -6,7 +6,6 @@ use tokio::sync::{RwLock, mpsc};
 
 struct EventBinding {
     event: String,
-    // We'll send the payload through this channel
     sender: mpsc::Sender<serde_json::Value>,
 }
 
@@ -97,10 +96,19 @@ impl RealtimeChannel {
         }
 
         *state = ChannelState::Leaving;
+        drop(state);
 
-        // TODO: Implement channel unsubscription
+        let leave_message = RealtimeMessage::new(
+            self.topic.clone(),
+            "phx_leave".to_string(),
+            serde_json::json!({}),
+        );
 
-        *state = ChannelState::Closed;
+        self.client.push(leave_message).await?;
+
+        tracing::info!("Unsubscribing from channel: {}", self.topic);
+
+        *self.state.write().await = ChannelState::Closed;
 
         Ok(())
     }
