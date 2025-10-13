@@ -1,7 +1,13 @@
 use crate::client::RealtimeClient;
 use crate::types::{ChannelState, Result};
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{RwLock, mpsc};
+
+struct EventBinding {
+    event: String,
+    // We'll send the payload through this channel
+    sender: mpsc::Sender<serde_json::Value>,
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct RealtimeChannelOptions {
@@ -16,6 +22,7 @@ pub struct RealtimeChannel {
     client: Arc<RealtimeClient>,
     state: Arc<RwLock<ChannelState>>,
     options: RealtimeChannelOptions,
+    bindings: Arc<RwLock<Vec<EventBinding>>>,
 }
 
 impl RealtimeChannel {
@@ -29,6 +36,28 @@ impl RealtimeChannel {
             client,
             state: Arc::new(RwLock::new(ChannelState::Closed)),
             options,
+            bindings: Arc::new(RwLock::new(Vec::new())),
+        }
+    }
+
+    pub async fn on(&self, event: &str) -> mpsc::Receiver<serde_json::Value> {
+        let (tx, rx) = mpsc::channel(100);
+        let binding = EventBinding {
+            event: event.to_string(),
+            sender: tx,
+        };
+
+        self.bindings.write().await.push(binding);
+
+        rx
+    }
+
+    pub(crate) async fn _trigger(&self, event: &str, payload: serde_json::Value) {
+        let bindings = self.bindings.read().await;
+        for binding in bindings.iter() {
+            if binding.event == event {
+                let _ = binding.sender.send(payload.clone()).await;
+            }
         }
     }
 
