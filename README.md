@@ -2,7 +2,7 @@
 
 A Rust client for [Supabase Realtime](https://supabase.com/docs/guides/realtime) - Phoenix Channels WebSocket protocol implementation.
 
-> ⚠️ **Work in Progress** - Core WebSocket connection and heartbeat are working! Message routing and channels coming next.
+> ⚠️ **Work in Progress** - Core WebSocket, channels, and broadcasting are working! Advanced features coming next.
 
 > **Note**: This is an unofficial, community-maintained client. For official clients, see [supabase-community](https://github.com/supabase-community).
 
@@ -15,11 +15,14 @@ A Rust client for [Supabase Realtime](https://supabase.com/docs/guides/realtime)
 - ✅ Concurrent read/write tasks
 - ✅ Heartbeat mechanism with timeout detection
 - ✅ Message serialization/deserialization
-- 🚧 Message routing and parsing (in progress)
-- ⏳ Channel subscriptions
+- ✅ Message routing and parsing
+- ✅ Channel subscriptions (subscribe/unsubscribe)
+- ✅ Event listeners with mpsc channels
+- ✅ Broadcast messages via WebSocket
+- ✅ HTTP fallback for broadcasts when disconnected
 - ⏳ Real-time Postgres changes
 - ⏳ Presence tracking
-- ⏳ Broadcast messages
+- ⏳ Push messages with acknowledgments
 - ⏳ Automatic reconnection with exponential backoff
 
 ## Installation
@@ -73,6 +76,18 @@ cargo run --example test_connection
 # Heartbeat mechanism test
 cargo run --example test_heartbeat
 
+# Channel subscription test
+cargo run --example test_channel
+
+# Subscribe/unsubscribe test
+cargo run --example test_unsubscribe
+
+# Broadcast message test
+cargo run --example test_send
+
+# HTTP fallback test
+cargo run --example test_http_fallback
+
 # Basic usage example (requires Supabase project)
 cargo run --example basic
 ```
@@ -103,29 +118,38 @@ src/
 - [x] Error handling
 - [x] Basic client structure
 
-### Phase 2: WebSocket Implementation ✅ MOSTLY COMPLETE
+### Phase 2: WebSocket Implementation ✅ COMPLETE
 - [x] WebSocket connection (tokio-tungstenite)
 - [x] Connection state management
 - [x] Concurrent read/write tasks
 - [x] Message serialization/deserialization (serde_json)
 - [x] Heartbeat mechanism with timeout
-- [ ] 🚧 **Next**: Message routing and parsing
+- [x] Message routing and parsing
 
-### Phase 3: Channels (Next)
-- [ ] Channel join/leave
-- [ ] Event listeners
-- [ ] Push/receive messages
-- [ ] HTTP fallback for broadcasts
+### Phase 3: Heartbeat & Reconnection 🚧 IN PROGRESS
+- [x] Heartbeat implementation with timeout
+- [x] Heartbeat acknowledgment handling
+- [ ] **Next**: Automatic reconnection logic
 
-### Phase 4: Advanced Features
+### Phase 4: Channel Implementation ✅ COMPLETE
+- [x] Channel creation (client.channel())
+- [x] Subscribe/unsubscribe to channels
+- [x] Event listeners with mpsc channels
+- [x] Message routing to channels
+- [x] Broadcast messages via WebSocket
+- [x] HTTP fallback for broadcasts
+
+### Phase 5: Advanced Features (Next)
+- [ ] Push messages with acknowledgments
 - [ ] Presence tracking
 - [ ] Postgres changes subscription
-- [ ] Reconnection logic
 - [ ] Access token refresh
 
-### Phase 5: Testing & Polish
+### Phase 6: Testing & Polish
 - [x] Basic connection tests
 - [x] Heartbeat tests
+- [x] Channel subscription tests
+- [x] Broadcast tests
 - [ ] Unit tests
 - [ ] Integration tests
 - [ ] Documentation
