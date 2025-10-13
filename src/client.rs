@@ -93,6 +93,7 @@ impl RealtimeClient {
         let (tx, mut rx) = mpsc::channel::<Message>(100);
 
         let pending_heartbeat_ref = Arc::clone(&self.pending_heartbeat_ref);
+        let channels = Arc::clone(&self.channels);
 
         let read_task = tokio::spawn(async move {
             while let Some(msg_result) = read_half.next().await {
@@ -120,7 +121,17 @@ impl RealtimeClient {
                                             }
                                         }
                                     }
-                                    //TODO: route other messages to channels
+                                    let channels = channels.read().await;
+                                    for channel in channels.iter() {
+                                        if channel.topic() == realtime_msg.topic {
+                                            channel
+                                                ._trigger(
+                                                    &realtime_msg.event,
+                                                    realtime_msg.payload.clone(),
+                                                )
+                                                .await;
+                                        }
+                                    }
                                 }
                                 Err(e) => {
                                     tracing::error!("Failed to parse message: {}", e);
