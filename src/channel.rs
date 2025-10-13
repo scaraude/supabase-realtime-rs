@@ -1,3 +1,4 @@
+use crate::RealtimeMessage;
 use crate::client::RealtimeClient;
 use crate::types::{ChannelState, Result};
 use std::sync::Arc;
@@ -70,11 +71,19 @@ impl RealtimeChannel {
         }
 
         *state = ChannelState::Joining;
+        drop(state);
 
-        // TODO: Implement channel subscription
+        let join_message = RealtimeMessage::new(
+            self.topic.clone(),
+            "phx_join".to_string(),
+            serde_json::json!({}),
+        );
+
+        self.client.push(join_message).await?;
+
         tracing::info!("Subscribing to channel: {}", self.topic);
 
-        *state = ChannelState::Joined;
+        *self.state.write().await = ChannelState::Joined;
 
         Ok(())
     }

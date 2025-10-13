@@ -1,3 +1,4 @@
+use crate::RealtimeChannel;
 use crate::types::{ConnectionState, RealtimeError, RealtimeMessage, Result};
 use crate::websocket::WebSocketFactory;
 use futures::sink::SinkExt;
@@ -28,11 +29,14 @@ impl Default for RealtimeClientOptions {
     }
 }
 
+#[derive(Clone)]
 pub struct RealtimeClient {
     endpoint: String,
     options: RealtimeClientOptions,
     state: Arc<RwLock<ConnectionState>>,
     ref_counter: Arc<RwLock<u64>>,
+
+    channels: Arc<RwLock<Vec<Arc<crate::channel::RealtimeChannel>>>>,
 
     write_tx: Arc<RwLock<Option<mpsc::Sender<Message>>>>,
     read_task: Arc<RwLock<Option<JoinHandle<()>>>>,
@@ -56,6 +60,8 @@ impl RealtimeClient {
             options,
             state: Arc::new(RwLock::new(ConnectionState::Closed)),
             ref_counter: Arc::new(RwLock::new(0)),
+
+            channels: Arc::new(RwLock::new(Vec::new())),
 
             write_tx: Arc::new(RwLock::new(None)),
             read_task: Arc::new(RwLock::new(None)),
@@ -206,6 +212,31 @@ impl RealtimeClient {
 
         tracing::info!("Connected to WebSocket server");
         Ok(())
+    }
+
+    pub async fn channel(
+        &self,
+        topic: &str,
+        options: crate::channel::RealtimeChannelOptions,
+    ) -> Arc<RealtimeChannel> {
+        let full_topic = format!("realtime:{}", topic);
+
+        let channels = self.channels.read().await;
+        for existing_channel in channels.iter() {
+            if existing_channel.topic() == full_topic {
+                return Arc::clone(existing_channel);
+            }
+        }
+        drop(channels);
+
+        let new_channel = Arc::new(RealtimeChannel::new(
+            full_topic,
+            Arc::new(self.clone()),
+            options,
+        ));
+        self.channels.write().await.push(Arc::clone(&new_channel));
+
+        new_channel
     }
 
     /// Disconnect from the WebSocket server
