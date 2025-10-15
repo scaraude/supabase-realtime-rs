@@ -24,12 +24,8 @@
 
 pub mod channel;
 pub mod client;
-pub mod event;
-pub mod heartbeat;
-pub mod http;
-pub mod router;
-pub mod task_manager;
-pub mod timer;
+pub mod infrastructure;
+pub mod messaging;
 pub mod types;
 pub mod websocket;
 
@@ -37,5 +33,5 @@ pub use channel::{ChannelState, RealtimeChannel, RealtimeChannelOptions};
 pub use client::{
     ClientState, ConnectionManager, ConnectionState, RealtimeClient, RealtimeClientOptions,
 };
-pub use event::{ChannelEvent, PostgresChangeFilter, PostgresChangeType, SystemEvent};
+pub use messaging::{ChannelEvent, PostgresChangeFilter, PostgresChangeType, SystemEvent};
 pub use types::{RealtimeError, RealtimeMessage};

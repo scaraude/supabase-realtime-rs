@@ -1,6 +1,6 @@
-use crate::channel::RealtimeChannel;
-use crate::task_manager::TaskManager;
 use super::connection::ConnectionState;
+use crate::channel::RealtimeChannel;
+use crate::infrastructure::TaskManager;
 use std::sync::Arc;
 use tokio::sync::watch;
 

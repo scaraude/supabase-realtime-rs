@@ -1,6 +1,6 @@
 use crate::client::RealtimeClient;
-use crate::event::ChannelEvent;
-use crate::http::HttpBroadcaster;
+use crate::messaging::ChannelEvent;
+use crate::infrastructure::HttpBroadcaster;
 use super::state::ChannelState;
 use crate::types::Result;
 use crate::{RealtimeMessage, SystemEvent};

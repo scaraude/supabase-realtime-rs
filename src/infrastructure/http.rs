@@ -1,7 +1,5 @@
-use crate::{
-    SystemEvent,
-    types::{RealtimeError, error::Result},
-};
+use crate::messaging::SystemEvent;
+use crate::types::{RealtimeError, error::Result};
 use serde_json::Value;
 
 /// Handles HTTP broadcast fallback when WebSocket is unavailable

@@ -1,10 +1,11 @@
-use super::{ClientState, ConnectionManager, ConnectionState, RealtimeClientBuilder, RealtimeClientOptions};
-use crate::heartbeat::HeartbeatManager;
-use crate::router::MessageRouter;
-use crate::timer::Timer;
+use super::{
+    ClientState, ConnectionManager, ConnectionState, RealtimeClientBuilder, RealtimeClientOptions,
+};
+use crate::RealtimeChannel;
+use crate::infrastructure::{HeartbeatManager, Timer};
+use crate::messaging::MessageRouter;
 use crate::types::{RealtimeError, RealtimeMessage, Result};
 use crate::websocket::WebSocketFactory;
-use crate::RealtimeChannel;
 use futures::stream::StreamExt;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -155,11 +156,9 @@ impl RealtimeClient {
         // Spawn heartbeat task using HeartbeatManager
         let heartbeat_interval = self.options.heartbeat_interval.unwrap_or(25_000);
 
-        let heartbeat_manager = HeartbeatManager::new(
-            Arc::downgrade(&self.connection),
-            Arc::clone(&self.state),
-        )
-        .with_interval(std::time::Duration::from_millis(heartbeat_interval));
+        let heartbeat_manager =
+            HeartbeatManager::new(Arc::downgrade(&self.connection), Arc::clone(&self.state))
+                .with_interval(std::time::Duration::from_millis(heartbeat_interval));
 
         heartbeat_manager.spawn_on(&self.state).await;
 
@@ -260,7 +259,7 @@ impl RealtimeClient {
 
     /// Get HTTP endpoint URL (for broadcasts)
     pub fn http_endpoint(&self) -> String {
-        crate::http::ws_to_http_endpoint(&self.endpoint)
+        crate::infrastructure::ws_to_http_endpoint(&self.endpoint)
     }
 
     /// Get API key

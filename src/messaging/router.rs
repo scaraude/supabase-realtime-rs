@@ -1,4 +1,4 @@
-use crate::SystemEvent;
+use super::SystemEvent;
 use crate::client::ClientState;
 use crate::types::constants::PHOENIX_TOPIC;
 use crate::types::message::RealtimeMessage;
