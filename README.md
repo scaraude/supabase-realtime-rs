@@ -20,10 +20,12 @@ A Rust client for [Supabase Realtime](https://supabase.com/docs/guides/realtime)
 - ✅ Event listeners with mpsc channels
 - ✅ Broadcast messages via WebSocket
 - ✅ HTTP fallback for broadcasts when disconnected
+- ✅ Automatic reconnection with exponential backoff
+- ✅ Manual vs automatic disconnect detection
+- ✅ Channel re-subscription after reconnect
 - ⏳ Real-time Postgres changes
 - ⏳ Presence tracking
 - ⏳ Push messages with acknowledgments
-- ⏳ Automatic reconnection with exponential backoff
 
 ## Installation
 
@@ -88,6 +90,9 @@ cargo run --example test_send
 # HTTP fallback test
 cargo run --example test_http_fallback
 
+# Reconnection infrastructure test
+cargo run --example test_reconnection
+
 # Basic usage example (requires Supabase project)
 cargo run --example basic
 ```
@@ -96,18 +101,29 @@ cargo run --example basic
 
 ```
 src/
-├── lib.rs           # Public API exports
-├── client.rs        # RealtimeClient - WebSocket connection management
-├── channel.rs       # RealtimeChannel - Channel subscriptions
-├── presence.rs      # RealtimePresence - User presence tracking
-├── push.rs          # Push - Message sending with callbacks
-├── timer.rs         # Timer - Reconnection logic with backoff
-├── types/           # Type definitions
-│   ├── constants.rs # Protocol constants
-│   ├── error.rs     # Error types
-│   └── message.rs   # Message types
-└── websocket/       # WebSocket abstraction
-    └── factory.rs   # WebSocket factory
+├── lib.rs              # Public API exports
+├── client/             # Client module (connection management)
+│   ├── builder.rs      # RealtimeClientBuilder with state watcher
+│   ├── client.rs       # RealtimeClient - main API
+│   ├── connection.rs   # ConnectionManager - WebSocket lifecycle
+│   └── state.rs        # ClientState - shared mutable state
+├── channel/            # Channel module (subscriptions)
+│   ├── channel.rs      # RealtimeChannel implementation
+│   └── state.rs        # ChannelState management
+├── messaging/          # Message handling
+│   ├── event.rs        # ChannelEvent, SystemEvent types
+│   └── router.rs       # Message routing logic
+├── infrastructure/     # Infrastructure services
+│   ├── heartbeat.rs    # Heartbeat mechanism
+│   ├── http.rs         # HTTP fallback for broadcasts
+│   ├── task_manager.rs # Background task management
+│   └── timer.rs        # Reconnection timer with backoff
+├── types/              # Core type definitions
+│   ├── constants.rs    # Protocol constants
+│   ├── error.rs        # Error types
+│   └── message.rs      # Message types
+└── websocket/          # WebSocket abstraction
+    └── factory.rs      # WebSocket factory
 ```
 
 ## Development Roadmap
@@ -126,10 +142,13 @@ src/
 - [x] Heartbeat mechanism with timeout
 - [x] Message routing and parsing
 
-### Phase 3: Heartbeat & Reconnection 🚧 IN PROGRESS
+### Phase 3: Heartbeat & Reconnection ✅ COMPLETE
 - [x] Heartbeat implementation with timeout
 - [x] Heartbeat acknowledgment handling
-- [ ] **Next**: Automatic reconnection logic
+- [x] Automatic reconnection logic with exponential backoff
+- [x] State watcher pattern for disconnect detection
+- [x] Manual vs automatic disconnect handling
+- [x] Channel re-subscription after reconnect
 
 ### Phase 4: Channel Implementation ✅ COMPLETE
 - [x] Channel creation (client.channel())
@@ -150,6 +169,7 @@ src/
 - [x] Heartbeat tests
 - [x] Channel subscription tests
 - [x] Broadcast tests
+- [x] Reconnection infrastructure test
 - [ ] Unit tests
 - [ ] Integration tests
 - [ ] Documentation
