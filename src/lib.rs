@@ -24,6 +24,8 @@
 
 pub mod client;
 pub mod channel;
+pub mod connection;
+pub mod heartbeat;
 pub mod presence;
 pub mod push;
 pub mod timer;

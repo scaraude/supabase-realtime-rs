@@ -17,7 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             api_key: "test".to_string(), // Echo server doesn't check this
             ..Default::default()
         },
-    )?;
+    )?.build();
 
     // Test 1: Connect
     println!("✅ Test 1: Connecting...");

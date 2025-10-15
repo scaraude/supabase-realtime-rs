@@ -1,12 +1,3 @@
-/// WebSocket connection states
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConnectionState {
-    Connecting,
-    Open,
-    Closing,
-    Closed,
-}
-
 /// Channel states
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChannelState {

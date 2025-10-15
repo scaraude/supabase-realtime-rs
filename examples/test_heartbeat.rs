@@ -18,7 +18,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             heartbeat_interval: Some(5000), // 5 seconds instead of 25
             ..Default::default()
         },
-    )?;
+    )?.build();
 
     println!("✅ Test 1: Connecting with heartbeat enabled...");
     client.connect().await?;
