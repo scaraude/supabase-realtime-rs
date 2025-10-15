@@ -1,5 +1,5 @@
-use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
 use supabase_realtime_rs::channel::RealtimeChannelOptions;
+use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -26,7 +26,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ Connected!\n");
 
     println!("✅ Creating channel...");
-    let channel = client.channel("test-room", RealtimeChannelOptions::default()).await;
+    let channel = client
+        .channel("test-room", RealtimeChannelOptions::default())
+        .await;
     println!("✅ Channel: {}\n", channel.topic());
 
     println!("✅ Registering listener for 'phx_join' and 'phx_leave'...");

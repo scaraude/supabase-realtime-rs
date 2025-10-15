@@ -1,6 +1,6 @@
-use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
-use supabase_realtime_rs::channel::RealtimeChannelOptions;
 use serde_json::json;
+use supabase_realtime_rs::channel::RealtimeChannelOptions;
+use supabase_realtime_rs::{ChannelEvent, RealtimeClient, RealtimeClientOptions};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -23,18 +23,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .build();
 
     println!("✅ Test 1: Creating channel WITHOUT connecting...");
-    let channel = client.channel("chat-room", RealtimeChannelOptions::default()).await;
+    let channel = client
+        .channel("chat-room", RealtimeChannelOptions::default())
+        .await;
     println!("✅ Channel: {}\n", channel.topic());
 
     println!("✅ Test 2: Attempting to send broadcast while DISCONNECTED...");
     println!("   (This should trigger HTTP fallback)\n");
 
-    match channel.send("chat-message", json!({
-        "user": "bob",
-        "message": "Hello via HTTP!"
-    })).await {
+    match channel
+        .send(
+            ChannelEvent::Custom(String::from("chat-message")),
+            json!({
+                "user": "bob",
+                "message": "Hello via HTTP!"
+            }),
+        )
+        .await
+    {
         Ok(_) => println!("❌ Unexpected: Send succeeded (but we're testing disconnected state)"),
-        Err(e) => println!("✅ Expected: Send failed with HTTP fallback attempt\n   Error: {}\n", e),
+        Err(e) => println!(
+            "✅ Expected: Send failed with HTTP fallback attempt\n   Error: {}\n",
+            e
+        ),
     }
 
     println!("✅ Test 3: Now connecting and subscribing...");
@@ -48,10 +59,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ Test 4: Sending broadcast while CONNECTED...");
     println!("   (This should use WebSocket)\n");
 
-    channel.send("chat-message", json!({
-        "user": "carol",
-        "message": "Hello via WebSocket!"
-    })).await?;
+    channel
+        .send(
+            ChannelEvent::Custom(String::from("chat-message")),
+            json!({
+                "user": "carol",
+                "message": "Hello via WebSocket!"
+            }),
+        )
+        .await?;
 
     println!("✅ Broadcast sent via WebSocket!\n");
 
@@ -65,12 +81,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ Test 6: Sending broadcast AFTER disconnect...");
     println!("   (This should trigger HTTP fallback again)\n");
 
-    match channel.send("chat-message", json!({
-        "user": "dave",
-        "message": "Hello after disconnect!"
-    })).await {
+    match channel
+        .send(
+            ChannelEvent::Custom(String::from("chat-message")),
+            json!({
+                "user": "dave",
+                "message": "Hello after disconnect!"
+            }),
+        )
+        .await
+    {
         Ok(_) => println!("❌ Unexpected: Send succeeded"),
-        Err(e) => println!("✅ Expected: Send failed with HTTP fallback attempt\n   Error: {}\n", e),
+        Err(e) => println!(
+            "✅ Expected: Send failed with HTTP fallback attempt\n   Error: {}\n",
+            e
+        ),
     }
 
     println!("🎉 All tests completed!");

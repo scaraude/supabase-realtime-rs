@@ -1,5 +1,5 @@
-use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
 use std::time::Duration;
+use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
 
 /// This test demonstrates that reconnection infrastructure is in place
 /// A full integration test would require a mock server that can drop connections
@@ -21,7 +21,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             api_key: "test".to_string(),
             ..Default::default()
         },
-    )?.build();
+    )?
+    .build();
 
     // Test 1: Connect and verify
     println!("✅ Test 1: Initial connection...");
