@@ -2,9 +2,9 @@ use crate::client::RealtimeClient;
 use crate::event::ChannelEvent;
 use crate::http::HttpBroadcaster;
 use crate::types::{ChannelState, Result};
-use crate::RealtimeMessage;
+use crate::{RealtimeMessage, SystemEvent};
 use std::sync::Arc;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{RwLock, mpsc};
 
 struct EventBinding {
     event: ChannelEvent,
@@ -60,8 +60,8 @@ impl RealtimeChannel {
     }
 
     /// Internal method to trigger events to registered listeners
-    pub(crate) async fn _trigger(&self, event: &str, payload: serde_json::Value) {
-        let event_enum = ChannelEvent::from_str(event);
+    pub(crate) async fn _trigger(&self, event: SystemEvent, payload: serde_json::Value) {
+        let event_enum = ChannelEvent::from_str(event.as_str());
         let bindings = self.bindings.read().await;
         for binding in bindings.iter() {
             if binding.event == event_enum {
@@ -81,11 +81,8 @@ impl RealtimeChannel {
         *state = ChannelState::Joining;
         drop(state);
 
-        let join_message = RealtimeMessage::new(
-            self.topic.clone(),
-            "phx_join".to_string(),
-            serde_json::json!({}),
-        );
+        let join_message =
+            RealtimeMessage::new(self.topic.clone(), SystemEvent::Join, serde_json::json!({}));
 
         self.client.push(join_message).await?;
 
@@ -96,7 +93,7 @@ impl RealtimeChannel {
         Ok(())
     }
 
-    pub async fn send_http(&self, event: &str, payload: serde_json::Value) -> Result<()> {
+    pub async fn send_http(&self, event: SystemEvent, payload: serde_json::Value) -> Result<()> {
         let broadcaster = HttpBroadcaster::new(
             self.client.http_endpoint(),
             self.client.api_key().to_string(),
@@ -121,7 +118,7 @@ impl RealtimeChannel {
 
         let leave_message = RealtimeMessage::new(
             self.topic.clone(),
-            "phx_leave".to_string(),
+            SystemEvent::Leave,
             serde_json::json!({}),
         );
 
@@ -134,7 +131,7 @@ impl RealtimeChannel {
         Ok(())
     }
 
-    pub async fn send(&self, event: &str, payload: serde_json::Value) -> Result<()> {
+    pub async fn send(&self, event: SystemEvent, payload: serde_json::Value) -> Result<()> {
         let is_joined = {
             let state = self.state.read().await;
             *state == ChannelState::Joined
@@ -143,14 +140,15 @@ impl RealtimeChannel {
         let is_connected = self.client.is_connected().await;
 
         if is_joined && is_connected {
+            let broadcast_topic = format!("{}:broadcast", self.topic);
             let message = RealtimeMessage::new(
-                self.topic.clone(),
-                format!("broadcast:{}", event),
-                serde_json::json!({ "type": "broadcast", "event": event, "payload": payload }),
+                broadcast_topic,
+                event.clone(),
+                serde_json::json!({ "type": "broadcast", "payload": payload }),
             );
 
             self.client.push(message).await?;
-            tracing::debug!("Sent broadcast via WebSocket: {}", event);
+            tracing::debug!("Sent broadcast via WebSocket: {}", event.as_str());
             Ok(())
         } else {
             self.send_http(event, payload).await

@@ -1,4 +1,7 @@
-use crate::types::{error::Result, RealtimeError};
+use crate::{
+    SystemEvent,
+    types::{RealtimeError, error::Result},
+};
 use serde_json::Value;
 
 /// Handles HTTP broadcast fallback when WebSocket is unavailable
@@ -21,7 +24,7 @@ impl HttpBroadcaster {
     pub async fn broadcast(
         &self,
         topic: &str,
-        event: &str,
+        event: SystemEvent,
         payload: Value,
         is_private: bool,
     ) -> Result<()> {
@@ -47,9 +50,10 @@ impl HttpBroadcaster {
             request = request.header("Authorization", format!("Bearer {}", token));
         }
 
-        let response = request.send().await.map_err(|e| {
-            RealtimeError::Connection(format!("HTTP broadcast failed: {}", e))
-        })?;
+        let response = request
+            .send()
+            .await
+            .map_err(|e| RealtimeError::Connection(format!("HTTP broadcast failed: {}", e)))?;
 
         if !response.status().is_success() {
             return Err(RealtimeError::Connection(format!(
@@ -58,7 +62,7 @@ impl HttpBroadcaster {
             )));
         }
 
-        tracing::debug!("Sent broadcast via HTTP: {}", event);
+        tracing::debug!("Sent broadcast via HTTP: {}", event.as_str());
         Ok(())
     }
 }

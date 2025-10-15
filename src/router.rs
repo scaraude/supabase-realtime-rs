@@ -1,4 +1,6 @@
+use crate::SystemEvent;
 use crate::client_state::ClientState;
+use crate::types::constants::PHOENIX_TOPIC;
 use crate::types::message::RealtimeMessage;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -26,8 +28,8 @@ impl MessageRouter {
 
     /// Checks if a message is a heartbeat acknowledgment
     fn is_heartbeat_message(&self, message: &RealtimeMessage) -> bool {
-        message.topic == "phoenix"
-            && (message.event == "phx_reply" || message.event == "heartbeat")
+        message.topic == PHOENIX_TOPIC
+            && (message.event == SystemEvent::Reply || message.event == SystemEvent::Heartbeat)
     }
 
     /// Handles heartbeat acknowledgment by clearing pending ref
@@ -48,7 +50,7 @@ impl MessageRouter {
         for channel in state.channels.iter() {
             if channel.topic() == message.topic {
                 channel
-                    ._trigger(&message.event, message.payload.clone())
+                    ._trigger(message.event.clone(), message.payload.clone())
                     .await;
             }
         }

@@ -18,6 +18,9 @@ pub mod phoenix_events {
     pub const HEARTBEAT: &str = "heartbeat";
 }
 
+/// Phoenix protocol topics
+pub const PHOENIX_TOPIC: &str = "phoenix";
+
 /// Channel event strings (magic strings layer)
 pub mod channel_events {
     pub const ACCESS_TOKEN: &str = "access_token";
