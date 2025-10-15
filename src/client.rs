@@ -1,5 +1,6 @@
 use crate::connection::{ConnectionManager, ConnectionState};
 use crate::heartbeat::HeartbeatManager;
+use crate::router::MessageRouter;
 use crate::RealtimeChannel;
 use crate::timer::Timer;
 use crate::types::{RealtimeError, RealtimeMessage, Result};
@@ -220,11 +221,14 @@ impl RealtimeClient {
         // Give write half to ConnectionManager
         self.connection.set_writer(write_half).await;
 
-        // Spawn read task
-        let pending_heartbeat_ref = Arc::clone(&self.pending_heartbeat_ref);
-        let channels = Arc::clone(&self.channels);
-        let self_cloned = self.clone();
+        // Create message router
+        let router = MessageRouter::new(
+            Arc::clone(&self.channels),
+            Arc::clone(&self.pending_heartbeat_ref),
+        );
 
+        // Spawn read task with router
+        let self_cloned = self.clone();
         let read_task = tokio::spawn(async move {
             while let Some(msg_result) = read_half.next().await {
                 match msg_result {
@@ -233,36 +237,7 @@ impl RealtimeClient {
                         if let tokio_tungstenite::tungstenite::Message::Text(text) = msg {
                             match serde_json::from_str::<RealtimeMessage>(&text) {
                                 Ok(realtime_msg) => {
-                                    // Handle heartbeat response
-                                    if realtime_msg.topic == "phoenix"
-                                        && (realtime_msg.event == "phx_reply"
-                                            || realtime_msg.event == "heartbeat")
-                                    {
-                                        if let Some(ref msg_ref) = realtime_msg.r#ref {
-                                            let pending = pending_heartbeat_ref.read().await;
-                                            if pending.as_ref() == Some(msg_ref) {
-                                                drop(pending);
-                                                *pending_heartbeat_ref.write().await = None;
-                                                tracing::debug!(
-                                                    "Received heartbeat ack for ref {}",
-                                                    msg_ref
-                                                );
-                                            }
-                                        }
-                                    }
-
-                                    // Route message to channels
-                                    let channels = channels.read().await;
-                                    for channel in channels.iter() {
-                                        if channel.topic() == realtime_msg.topic {
-                                            channel
-                                                ._trigger(
-                                                    &realtime_msg.event,
-                                                    realtime_msg.payload.clone(),
-                                                )
-                                                .await;
-                                        }
-                                    }
+                                    router.route(realtime_msg).await;
                                 }
                                 Err(e) => {
                                     tracing::error!("Failed to parse message: {}", e);
@@ -398,18 +373,17 @@ impl RealtimeClient {
         Ok(())
     }
 
-    pub fn http_endpoint(&self) -> Result<String> {
-        let url = self
-            .endpoint
-            .replace("ws://", "http://")
-            .replace("wss://", "https://");
-        Ok(url.split('?').next().unwrap_or(&url).to_string())
+    /// Get HTTP endpoint URL (for broadcasts)
+    pub fn http_endpoint(&self) -> String {
+        crate::http::ws_to_http_endpoint(&self.endpoint)
     }
 
+    /// Get API key
     pub fn api_key(&self) -> &str {
         &self.options.api_key
     }
 
+    /// Get access token
     pub fn access_token(&self) -> Option<&str> {
         self.options.access_token.as_deref()
     }

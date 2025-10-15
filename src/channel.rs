@@ -1,8 +1,9 @@
 use crate::client::RealtimeClient;
+use crate::http::HttpBroadcaster;
 use crate::types::{ChannelState, Result};
-use crate::{RealtimeError, RealtimeMessage};
+use crate::RealtimeMessage;
 use std::sync::Arc;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::{mpsc, RwLock};
 
 struct EventBinding {
     event: String,
@@ -92,44 +93,15 @@ impl RealtimeChannel {
     }
 
     pub async fn send_http(&self, event: &str, payload: serde_json::Value) -> Result<()> {
-        let endpoint = self.client.http_endpoint()?;
-        let url = format!("{}/api/broadcast", endpoint);
+        let broadcaster = HttpBroadcaster::new(
+            self.client.http_endpoint(),
+            self.client.api_key().to_string(),
+            self.client.access_token().map(|s| s.to_string()),
+        );
 
-        let body = serde_json::json!({
-            "messages": [{
-                "topic": self.topic,
-                "event": event,
-                "payload": payload,
-                "private": self.options.is_private,
-            }]
-        });
-
-        let api_key = self.client.api_key();
-        let access_token = self.client.access_token();
-
-        let http_client = reqwest::Client::new();
-        let mut request = http_client
-            .post(&url)
-            .header("Content_Type", "application/json")
-            .header("apiKey", api_key)
-            .json(&body);
-        if let Some(token) = access_token {
-            request = request.header("Authorization", format!("Bearer {}", token));
-        }
-
-        let response = request
-            .send()
+        broadcaster
+            .broadcast(&self.topic, event, payload, self.options.is_private)
             .await
-            .map_err(|e| RealtimeError::Connection(format!("HTTP broadcast failed: {}", e)))?;
-        if !response.status().is_success() {
-            return Err(RealtimeError::Connection(format!(
-                "HTTP broadcast failed with status: {}",
-                response.status()
-            )));
-        }
-
-        tracing::debug!("Sent broadcast via HTTP: {}", event);
-        Ok(())
     }
 
     /// Unsubscribe from the channel
