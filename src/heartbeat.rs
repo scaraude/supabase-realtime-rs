@@ -63,11 +63,10 @@ impl HeartbeatManager {
                     }
                 }
 
-                // Generate new ref
+                // Generate new ref using ClientState's make_ref method
                 let new_ref = {
                     let mut state = self.state.write().await;
-                    state.ref_counter += 1;
-                    state.ref_counter.to_string()
+                    state.make_ref()
                 };
 
                 let heartbeat_msg = RealtimeMessage {
