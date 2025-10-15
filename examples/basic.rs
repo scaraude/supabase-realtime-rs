@@ -12,7 +12,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             api_key: "your-anon-key".to_string(),
             ..Default::default()
         },
-    )?;
+    )?
+    .build();
 
     // Connect
     println!("Connecting to Supabase Realtime...");

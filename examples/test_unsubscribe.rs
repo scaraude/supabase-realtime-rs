@@ -18,7 +18,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             heartbeat_interval: Some(30_000),
             ..Default::default()
         },
-    )?;
+    )?
+    .build();
 
     println!("✅ Connecting to server...");
     client.connect().await?;
