@@ -1,31 +1,27 @@
+use crate::client_state::ClientState;
 use crate::connection::ConnectionManager;
 use crate::types::message::RealtimeMessage;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 use tokio::sync::RwLock;
-use tokio::task::JoinHandle;
-use tokio::time;
 
 const DEFAULT_HEARTBEAT_INTERVAL: Duration = Duration::from_millis(30000);
 
 pub struct HeartbeatManager {
     interval: Duration,
-    pending_ref: Arc<RwLock<Option<String>>>,
+    state: Arc<RwLock<ClientState>>,
     connection: Weak<ConnectionManager>,
-    ref_counter: Arc<RwLock<u64>>,
 }
 
 impl HeartbeatManager {
-    pub fn new_with_counter(
+    pub fn new(
         connection: Weak<ConnectionManager>,
-        ref_counter: Arc<RwLock<u64>>,
-        pending_ref: Arc<RwLock<Option<String>>>,
+        state: Arc<RwLock<ClientState>>,
     ) -> Self {
         Self {
             interval: DEFAULT_HEARTBEAT_INTERVAL,
-            pending_ref,
+            state,
             connection,
-            ref_counter,
         }
     }
 
@@ -35,10 +31,11 @@ impl HeartbeatManager {
     }
 
     /// Spawns the heartbeat task that runs periodically
-    pub fn spawn(self) -> JoinHandle<()> {
-        tokio::spawn(async move {
-            let mut interval_timer = time::interval(self.interval);
-            interval_timer.set_missed_tick_behavior(time::MissedTickBehavior::Skip);
+    pub async fn spawn_on(self, state: &Arc<RwLock<ClientState>>) {
+        let mut state_guard = state.write().await;
+        state_guard.task_manager.spawn(async move {
+            let mut interval_timer = tokio::time::interval(self.interval);
+            interval_timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
             loop {
                 interval_timer.tick().await;
@@ -59,8 +56,8 @@ impl HeartbeatManager {
 
                 // Check for pending heartbeat (timeout detection)
                 {
-                    let pending = self.pending_ref.read().await;
-                    if pending.is_some() {
+                    let state = self.state.read().await;
+                    if state.pending_heartbeat_ref.is_some() {
                         eprintln!("[Heartbeat] Timeout detected, closing connection");
                         let _ = connection.close().await;
                         continue;
@@ -69,9 +66,9 @@ impl HeartbeatManager {
 
                 // Generate new ref
                 let new_ref = {
-                    let mut counter = self.ref_counter.write().await;
-                    *counter += 1;
-                    counter.to_string()
+                    let mut state = self.state.write().await;
+                    state.ref_counter += 1;
+                    state.ref_counter.to_string()
                 };
 
                 let heartbeat_msg = RealtimeMessage {
@@ -84,8 +81,8 @@ impl HeartbeatManager {
 
                 match connection.send_message(heartbeat_msg).await {
                     Ok(_) => {
-                        let mut pending = self.pending_ref.write().await;
-                        *pending = Some(new_ref.clone());
+                        let mut state = self.state.write().await;
+                        state.pending_heartbeat_ref = Some(new_ref.clone());
                         tracing::debug!("Sent heartbeat with ref {}", new_ref);
                     }
                     Err(e) => {
@@ -93,12 +90,6 @@ impl HeartbeatManager {
                     }
                 }
             }
-        })
-    }
-
-    /// Clears the pending heartbeat ref (call this when heartbeat reply received)
-    pub async fn clear_pending_ref(&self) {
-        let mut pending = self.pending_ref.write().await;
-        *pending = None;
+        });
     }
 }

@@ -1,4 +1,5 @@
 use crate::client::RealtimeClient;
+use crate::event::ChannelEvent;
 use crate::http::HttpBroadcaster;
 use crate::types::{ChannelState, Result};
 use crate::RealtimeMessage;
@@ -6,7 +7,7 @@ use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 
 struct EventBinding {
-    event: String,
+    event: ChannelEvent,
     sender: mpsc::Sender<serde_json::Value>,
 }
 
@@ -45,10 +46,11 @@ impl RealtimeChannel {
         *self.state.read().await == ChannelState::Joined
     }
 
-    pub async fn on(&self, event: &str) -> mpsc::Receiver<serde_json::Value> {
+    /// Register an event listener for a specific event type
+    pub async fn on(&self, event: impl Into<ChannelEvent>) -> mpsc::Receiver<serde_json::Value> {
         let (tx, rx) = mpsc::channel(100);
         let binding = EventBinding {
-            event: event.to_string(),
+            event: event.into(),
             sender: tx,
         };
 
@@ -57,10 +59,12 @@ impl RealtimeChannel {
         rx
     }
 
+    /// Internal method to trigger events to registered listeners
     pub(crate) async fn _trigger(&self, event: &str, payload: serde_json::Value) {
+        let event_enum = ChannelEvent::from_str(event);
         let bindings = self.bindings.read().await;
         for binding in bindings.iter() {
-            if binding.event == event {
+            if binding.event == event_enum {
                 let _ = binding.sender.send(payload.clone()).await;
             }
         }
