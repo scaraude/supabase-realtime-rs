@@ -8,15 +8,22 @@ pub enum ChannelState {
     Leaving,
 }
 
-/// Channel events
-pub mod channel_events {
+/// Phoenix protocol event strings (magic strings layer)
+pub mod phoenix_events {
     pub const CLOSE: &str = "phx_close";
     pub const ERROR: &str = "phx_error";
     pub const JOIN: &str = "phx_join";
     pub const REPLY: &str = "phx_reply";
     pub const LEAVE: &str = "phx_leave";
-    pub const ACCESS_TOKEN: &str = "access_token";
     pub const HEARTBEAT: &str = "heartbeat";
+}
+
+/// Channel event strings (magic strings layer)
+pub mod channel_events {
+    pub const ACCESS_TOKEN: &str = "access_token";
+    pub const POSTGRES_CHANGES: &str = "postgres_changes";
+    pub const BROADCAST: &str = "broadcast";
+    pub const PRESENCE: &str = "presence";
 }
 
 /// WebSocket transport

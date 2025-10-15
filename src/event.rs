@@ -1,3 +1,4 @@
+use crate::types::constants::{channel_events, phoenix_events};
 use serde::{Deserialize, Serialize};
 
 /// Type-safe channel events
@@ -25,10 +26,12 @@ impl ChannelEvent {
     /// Parse a string into a ChannelEvent
     pub fn from_str(s: &str) -> Self {
         match s {
-            "postgres_changes" => Self::PostgresChanges,
-            "broadcast" => Self::Broadcast,
-            "presence" => Self::Presence,
-            _ if s.starts_with("phx_") => Self::System(SystemEvent::from_str(s)),
+            channel_events::POSTGRES_CHANGES => Self::PostgresChanges,
+            channel_events::BROADCAST => Self::Broadcast,
+            channel_events::PRESENCE => Self::Presence,
+            _ if s.starts_with("phx_") || s == phoenix_events::HEARTBEAT => {
+                Self::System(SystemEvent::from_str(s))
+            }
             _ => Self::Custom(s.to_string()),
         }
     }
@@ -36,9 +39,9 @@ impl ChannelEvent {
     /// Convert event to string representation
     pub fn as_str(&self) -> &str {
         match self {
-            Self::PostgresChanges => "postgres_changes",
-            Self::Broadcast => "broadcast",
-            Self::Presence => "presence",
+            Self::PostgresChanges => channel_events::POSTGRES_CHANGES,
+            Self::Broadcast => channel_events::BROADCAST,
+            Self::Presence => channel_events::PRESENCE,
             Self::System(sys) => sys.as_str(),
             Self::Custom(s) => s,
         }
@@ -95,24 +98,24 @@ pub enum SystemEvent {
 impl SystemEvent {
     pub fn from_str(s: &str) -> Self {
         match s {
-            "phx_join" => Self::Join,
-            "phx_leave" => Self::Leave,
-            "phx_reply" => Self::Reply,
-            "phx_close" => Self::Close,
-            "phx_error" => Self::Error,
-            "heartbeat" => Self::Heartbeat,
+            phoenix_events::JOIN => Self::Join,
+            phoenix_events::LEAVE => Self::Leave,
+            phoenix_events::REPLY => Self::Reply,
+            phoenix_events::CLOSE => Self::Close,
+            phoenix_events::ERROR => Self::Error,
+            phoenix_events::HEARTBEAT => Self::Heartbeat,
             _ => Self::Error, // Default to error for unknown system events
         }
     }
 
     pub fn as_str(&self) -> &str {
         match self {
-            Self::Join => "phx_join",
-            Self::Leave => "phx_leave",
-            Self::Reply => "phx_reply",
-            Self::Close => "phx_close",
-            Self::Error => "phx_error",
-            Self::Heartbeat => "heartbeat",
+            Self::Join => phoenix_events::JOIN,
+            Self::Leave => phoenix_events::LEAVE,
+            Self::Reply => phoenix_events::REPLY,
+            Self::Close => phoenix_events::CLOSE,
+            Self::Error => phoenix_events::ERROR,
+            Self::Heartbeat => phoenix_events::HEARTBEAT,
         }
     }
 }

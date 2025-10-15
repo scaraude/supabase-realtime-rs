@@ -22,9 +22,9 @@
 //! }
 //! ```
 
+pub mod channel;
 pub mod client;
 pub mod client_state;
-pub mod channel;
 pub mod connection;
 pub mod event;
 pub mod heartbeat;
@@ -37,8 +37,8 @@ pub mod timer;
 pub mod types;
 pub mod websocket;
 
-pub use client::{RealtimeClient, RealtimeClientOptions};
 pub use channel::{RealtimeChannel, RealtimeChannelOptions};
+pub use client::{RealtimeClient, RealtimeClientOptions};
 pub use event::{ChannelEvent, PostgresChangeFilter, PostgresChangeType, SystemEvent};
 pub use presence::RealtimePresence;
 pub use types::{RealtimeError, RealtimeMessage};

@@ -14,10 +14,7 @@ pub struct HeartbeatManager {
 }
 
 impl HeartbeatManager {
-    pub fn new(
-        connection: Weak<ConnectionManager>,
-        state: Arc<RwLock<ClientState>>,
-    ) -> Self {
+    pub fn new(connection: Weak<ConnectionManager>, state: Arc<RwLock<ClientState>>) -> Self {
         Self {
             interval: DEFAULT_HEARTBEAT_INTERVAL,
             state,
