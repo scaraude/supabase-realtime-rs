@@ -1,7 +1,7 @@
-use crate::messaging::SystemEvent;
 use crate::client::{ClientState, ConnectionManager};
-use crate::types::message::RealtimeMessage;
 use crate::types::constants::PHOENIX_TOPIC;
+use crate::types::message::RealtimeMessage;
+use crate::{ChannelEvent, SystemEvent};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 use tokio::sync::RwLock;
@@ -70,7 +70,7 @@ impl HeartbeatManager {
 
                 let heartbeat_msg = RealtimeMessage {
                     topic: PHOENIX_TOPIC.to_string(),
-                    event: SystemEvent::Heartbeat,
+                    event: ChannelEvent::System(SystemEvent::Heartbeat),
                     payload: serde_json::json!({}),
                     r#ref: Some(new_ref.clone()),
                     join_ref: None,

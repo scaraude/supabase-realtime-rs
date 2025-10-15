@@ -1,4 +1,4 @@
-use crate::messaging::SystemEvent;
+use crate::ChannelEvent;
 use crate::types::{RealtimeError, error::Result};
 use serde_json::Value;
 
@@ -22,7 +22,7 @@ impl HttpBroadcaster {
     pub async fn broadcast(
         &self,
         topic: &str,
-        event: SystemEvent,
+        event: ChannelEvent,
         payload: Value,
         is_private: bool,
     ) -> Result<()> {

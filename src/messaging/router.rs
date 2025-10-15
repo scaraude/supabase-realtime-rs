@@ -1,4 +1,5 @@
 use super::SystemEvent;
+use crate::ChannelEvent;
 use crate::client::ClientState;
 use crate::types::constants::PHOENIX_TOPIC;
 use crate::types::message::RealtimeMessage;
@@ -28,8 +29,8 @@ impl MessageRouter {
 
     /// Checks if a message is a heartbeat acknowledgment
     fn is_heartbeat_message(&self, message: &RealtimeMessage) -> bool {
-        message.topic == PHOENIX_TOPIC
-            && (message.event == SystemEvent::Reply || message.event == SystemEvent::Heartbeat)
+        message.topic == PHOENIX_TOPIC && message.event == ChannelEvent::System(SystemEvent::Reply)
+            || message.event == ChannelEvent::System(SystemEvent::Heartbeat)
     }
 
     /// Handles heartbeat acknowledgment by clearing pending ref

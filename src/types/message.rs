@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 
-use crate::SystemEvent;
+use crate::ChannelEvent;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RealtimeMessage {
     pub topic: String,
-    pub event: SystemEvent,
+    pub event: ChannelEvent,
     #[serde(default)]
     pub payload: serde_json::Value,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -15,7 +15,7 @@ pub struct RealtimeMessage {
 }
 
 impl RealtimeMessage {
-    pub fn new(topic: String, event: SystemEvent, payload: serde_json::Value) -> Self {
+    pub fn new(topic: String, event: ChannelEvent, payload: serde_json::Value) -> Self {
         Self {
             topic,
             event,

@@ -1,6 +1,6 @@
-use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
-use supabase_realtime_rs::channel::RealtimeChannelOptions;
 use serde_json::json;
+use supabase_realtime_rs::channel::RealtimeChannelOptions;
+use supabase_realtime_rs::{ChannelEvent, RealtimeClient, RealtimeClientOptions};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -27,7 +27,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✅ Connected!\n");
 
     println!("✅ Test 2: Creating channel...");
-    let channel = client.channel("chat-room", RealtimeChannelOptions::default()).await;
+    let channel = client
+        .channel("chat-room", RealtimeChannelOptions::default())
+        .await;
     println!("✅ Channel: {}\n", channel.topic());
 
     println!("✅ Test 3: Subscribing to channel...");
@@ -48,10 +50,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
 
     println!("✅ Test 5: Sending broadcast message via WebSocket...");
-    channel.send("chat-message", json!({
-        "user": "alice",
-        "message": "Hello from Rust!"
-    })).await?;
+
+    channel
+        .send(
+            ChannelEvent::Custom(String::from("chat-message")),
+            json!({
+                "user": "alice",
+                "message": "Hello from Rust!"
+            }),
+        )
+        .await?;
     println!("✅ Broadcast sent!\n");
 
     // Wait for echo

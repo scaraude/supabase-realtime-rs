@@ -1,7 +1,7 @@
-use crate::client::RealtimeClient;
-use crate::messaging::ChannelEvent;
-use crate::infrastructure::HttpBroadcaster;
 use super::state::ChannelState;
+use crate::client::RealtimeClient;
+use crate::infrastructure::HttpBroadcaster;
+use crate::messaging::ChannelEvent;
 use crate::types::Result;
 use crate::{RealtimeMessage, SystemEvent};
 use std::sync::Arc;
@@ -61,7 +61,7 @@ impl RealtimeChannel {
     }
 
     /// Internal method to trigger events to registered listeners
-    pub(crate) async fn _trigger(&self, event: SystemEvent, payload: serde_json::Value) {
+    pub(crate) async fn _trigger(&self, event: ChannelEvent, payload: serde_json::Value) {
         let event_enum = ChannelEvent::from_str(event.as_str());
         let bindings = self.bindings.read().await;
         for binding in bindings.iter() {
@@ -82,8 +82,11 @@ impl RealtimeChannel {
         *state = ChannelState::Joining;
         drop(state);
 
-        let join_message =
-            RealtimeMessage::new(self.topic.clone(), SystemEvent::Join, serde_json::json!({}));
+        let join_message = RealtimeMessage::new(
+            self.topic.clone(),
+            ChannelEvent::System(SystemEvent::Join),
+            serde_json::json!({}),
+        );
 
         self.client.push(join_message).await?;
 
@@ -94,7 +97,7 @@ impl RealtimeChannel {
         Ok(())
     }
 
-    pub async fn send_http(&self, event: SystemEvent, payload: serde_json::Value) -> Result<()> {
+    pub async fn send_http(&self, event: ChannelEvent, payload: serde_json::Value) -> Result<()> {
         let broadcaster = HttpBroadcaster::new(
             self.client.http_endpoint(),
             self.client.api_key().to_string(),
@@ -119,7 +122,7 @@ impl RealtimeChannel {
 
         let leave_message = RealtimeMessage::new(
             self.topic.clone(),
-            SystemEvent::Leave,
+            ChannelEvent::System(SystemEvent::Leave),
             serde_json::json!({}),
         );
 
@@ -132,7 +135,7 @@ impl RealtimeChannel {
         Ok(())
     }
 
-    pub async fn send(&self, event: SystemEvent, payload: serde_json::Value) -> Result<()> {
+    pub async fn send(&self, event: ChannelEvent, payload: serde_json::Value) -> Result<()> {
         let is_joined = {
             let state = self.state.read().await;
             *state == ChannelState::Joined
