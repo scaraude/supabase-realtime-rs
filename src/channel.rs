@@ -40,6 +40,10 @@ impl RealtimeChannel {
         }
     }
 
+    pub async fn was_joined(&self) -> bool {
+        *self.state.read().await == ChannelState::Joined
+    }
+
     pub async fn on(&self, event: &str) -> mpsc::Receiver<serde_json::Value> {
         let (tx, rx) = mpsc::channel(100);
         let binding = EventBinding {

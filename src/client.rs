@@ -1,11 +1,12 @@
 use crate::RealtimeChannel;
+use crate::timer::Timer;
 use crate::types::{ConnectionState, RealtimeError, RealtimeMessage, Result};
 use crate::websocket::WebSocketFactory;
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use tokio::sync::mpsc;
+use tokio::sync::{RwLock, watch};
 use tokio::task::JoinHandle;
 use tokio_tungstenite::tungstenite::Message;
 use url::Url;
@@ -29,6 +30,81 @@ impl Default for RealtimeClientOptions {
     }
 }
 
+/// Builder for RealtimeClient that handles initialization
+pub struct RealtimeClientBuilder {
+    endpoint: String,
+    options: RealtimeClientOptions,
+}
+
+impl RealtimeClientBuilder {
+    /// Create a new builder
+    pub fn new(endpoint: impl Into<String>, options: RealtimeClientOptions) -> Result<Self> {
+        let endpoint = endpoint.into();
+
+        // Validate API key is provided
+        if options.api_key.is_empty() {
+            return Err(RealtimeError::Auth("API key is required".to_string()));
+        }
+
+        Ok(Self { endpoint, options })
+    }
+
+    /// Build the client and spawn background tasks
+    pub fn build(self) -> RealtimeClient {
+        let client = RealtimeClient {
+            endpoint: self.endpoint,
+            options: self.options,
+            state: Arc::new(RwLock::new(ConnectionState::Closed)),
+            ref_counter: Arc::new(RwLock::new(0)),
+            channels: Arc::new(RwLock::new(Vec::new())),
+            write_tx: Arc::new(RwLock::new(None)),
+            read_task: Arc::new(RwLock::new(None)),
+            write_task: Arc::new(RwLock::new(None)),
+            pending_heartbeat_ref: Arc::new(RwLock::new(None)),
+            heartbeat_task: Arc::new(RwLock::new(None)),
+            was_manual_disconnect: Arc::new(RwLock::new(false)),
+            state_change_tx: Arc::new(RwLock::new(None)),
+            reconnect_task: Arc::new(RwLock::new(None)),
+        };
+
+        // Initialize state watcher channel
+        let (state_tx, state_rx) = watch::channel((ConnectionState::Closed, false));
+
+        // Store the sender (we can't use async in build, so we'll use blocking)
+        // This is safe because we're just setting an Option from None to Some
+        if let Ok(mut tx) = client.state_change_tx.try_write() {
+            *tx = Some(state_tx);
+        }
+
+        // Spawn reconnection watcher task
+        let client_for_watcher = client.clone();
+        let watcher_task = tokio::spawn(async move {
+            let mut rx = state_rx;
+
+            while rx.changed().await.is_ok() {
+                let (state, was_manual) = *rx.borrow();
+
+                // Reconnect if closed/disconnected AND not manual
+                if matches!(state, ConnectionState::Closed) && !was_manual {
+                    tracing::info!("State watcher detected disconnect, attempting reconnection...");
+
+                    if let Err(e) = client_for_watcher.try_reconnect().await {
+                        tracing::error!("Reconnection watcher failed: {}", e);
+                    }
+                }
+            }
+            tracing::info!("Reconnection watcher task finished");
+        });
+
+        // Store the watcher task
+        if let Ok(mut task) = client.reconnect_task.try_write() {
+            *task = Some(watcher_task);
+        }
+
+        client
+    }
+}
+
 #[derive(Clone)]
 pub struct RealtimeClient {
     endpoint: String,
@@ -44,44 +120,99 @@ pub struct RealtimeClient {
 
     pending_heartbeat_ref: Arc<RwLock<Option<String>>>,
     heartbeat_task: Arc<RwLock<Option<JoinHandle<()>>>>,
+
+    was_manual_disconnect: Arc<RwLock<bool>>,
+    state_change_tx: Arc<RwLock<Option<watch::Sender<(ConnectionState, bool)>>>>,
+    reconnect_task: Arc<RwLock<Option<JoinHandle<()>>>>,
 }
 
 impl RealtimeClient {
-    pub fn new(endpoint: impl Into<String>, options: RealtimeClientOptions) -> Result<Self> {
-        let endpoint = endpoint.into();
-
-        // Validate API key is provided
-        if options.api_key.is_empty() {
-            return Err(RealtimeError::Auth("API key is required".to_string()));
-        }
-
-        Ok(Self {
-            endpoint,
-            options,
-            state: Arc::new(RwLock::new(ConnectionState::Closed)),
-            ref_counter: Arc::new(RwLock::new(0)),
-
-            channels: Arc::new(RwLock::new(Vec::new())),
-
-            write_tx: Arc::new(RwLock::new(None)),
-            read_task: Arc::new(RwLock::new(None)),
-            write_task: Arc::new(RwLock::new(None)),
-
-            pending_heartbeat_ref: Arc::new(RwLock::new(None)),
-            heartbeat_task: Arc::new(RwLock::new(None)),
-        })
+    /// Create a new RealtimeClient using the builder pattern
+    ///
+    /// # Example
+    /// ```
+    /// let client = RealtimeClient::new(endpoint, options)?.build();
+    /// ```
+    pub fn new(
+        endpoint: impl Into<String>,
+        options: RealtimeClientOptions,
+    ) -> Result<RealtimeClientBuilder> {
+        RealtimeClientBuilder::new(endpoint, options)
     }
 
-    /// Connect to the WebSocket server
-    pub async fn connect(&self) -> Result<()> {
-        let mut state = self.state.write().await;
+    /// Set connection state and notify watchers
+    async fn set_state(&self, new_state: ConnectionState) {
+        *self.state.write().await = new_state;
 
-        if *state == ConnectionState::Open || *state == ConnectionState::Connecting {
+        let was_manual = *self.was_manual_disconnect.read().await;
+        if let Some(tx) = self.state_change_tx.read().await.as_ref() {
+            let _ = tx.send((new_state, was_manual));
+        }
+    }
+
+    /// Set manual disconnect flag and notify watchers
+    async fn set_manual_disconnect(&self, manual: bool) {
+        *self.was_manual_disconnect.write().await = manual;
+
+        let state = *self.state.read().await;
+        if let Some(tx) = self.state_change_tx.read().await.as_ref() {
+            let _ = tx.send((state, manual));
+        }
+    }
+
+    pub async fn resubscribe_all_channels(&self) -> Result<()> {
+        let channels = self.channels.read().await;
+        for channel in channels.iter() {
+            if channel.was_joined().await {
+                channel.subscribe().await?;
+            }
+        }
+        Ok(())
+    }
+
+    pub async fn try_reconnect(&self) -> Result<()> {
+        if *self.was_manual_disconnect.read().await {
+            tracing::info!("Manual disconnect detected, will not attempt to reconnect");
             return Ok(());
         }
 
-        *state = ConnectionState::Connecting;
-        drop(state);
+        let mut timer = Timer::default();
+        loop {
+            {
+                let state = self.state.read().await;
+                if *state == ConnectionState::Open || *state == ConnectionState::Connecting {
+                    tracing::info!(
+                        "Already connected or connecting, stopping reconnection attempts"
+                    );
+                    break;
+                }
+            }
+
+            tracing::info!("Attempting to reconnect...");
+            match self.connect().await {
+                Ok(_) => {
+                    tracing::info!("Reconnected successfully");
+                    self.resubscribe_all_channels().await?;
+                    break;
+                }
+                Err(e) => {
+                    tracing::error!("Reconnection attempt failed: {}", e);
+                    timer.schedule_timeout().await;
+                }
+            }
+        }
+        Ok(())
+    }
+    /// Connect to the WebSocket server
+    pub async fn connect(&self) -> Result<()> {
+        {
+            let state = self.state.read().await;
+            if *state == ConnectionState::Open || *state == ConnectionState::Connecting {
+                return Ok(());
+            }
+        }
+        self.set_state(ConnectionState::Connecting).await;
+
         // Build WebSocket URL with query parameters
         let url = self.build_endpoint_url()?;
         tracing::info!("Connecting to {}", url);
@@ -95,6 +226,7 @@ impl RealtimeClient {
         let pending_heartbeat_ref = Arc::clone(&self.pending_heartbeat_ref);
         let channels = Arc::clone(&self.channels);
 
+        let self_cloned = self.clone();
         let read_task = tokio::spawn(async move {
             while let Some(msg_result) = read_half.next().await {
                 match msg_result {
@@ -141,6 +273,7 @@ impl RealtimeClient {
                     }
                     Err(e) => {
                         tracing::error!("WebSocket read error: {}", e);
+                        self_cloned.set_state(ConnectionState::Closed).await;
                         break;
                     }
                 }
@@ -166,9 +299,10 @@ impl RealtimeClient {
         let heartbeat_interval = self.options.heartbeat_interval.unwrap_or(25_000);
         // Clone the Arc references we need
         let pending_heartbeat_ref = Arc::clone(&self.pending_heartbeat_ref);
-        let write_tx = Arc::clone(&self.write_tx);
+        let write_tx_arc = Arc::clone(&self.write_tx);
         let ref_counter = Arc::clone(&self.ref_counter);
         let state = Arc::clone(&self.state);
+        let client_for_heartbeat = self.clone();
 
         let heartbeat_task = tokio::spawn(async move {
             let mut interval =
@@ -181,7 +315,14 @@ impl RealtimeClient {
 
                 let pending = pending_heartbeat_ref.read().await;
                 if pending.is_some() {
-                    tracing::warn!("Heartbeat timeout - server not responding");
+                    tracing::warn!("Heartbeat timeout - closing connection");
+                    drop(pending);
+                    // Close the write channel to trigger connection closure
+                    *write_tx_arc.write().await = None;
+                    // Set state to Closed which will trigger reconnection watcher
+                    client_for_heartbeat
+                        .set_state(ConnectionState::Closed)
+                        .await;
                     break;
                 }
                 drop(pending);
@@ -193,7 +334,7 @@ impl RealtimeClient {
 
                 *pending_heartbeat_ref.write().await = Some(heartbeat_ref.clone());
 
-                let tx_guard = write_tx.read().await;
+                let tx_guard = write_tx_arc.read().await;
                 if let Some(tx) = tx_guard.as_ref() {
                     let heartbeat_message = RealtimeMessage {
                         topic: "phoenix".to_string(),
@@ -218,8 +359,8 @@ impl RealtimeClient {
         });
 
         *self.heartbeat_task.write().await = Some(heartbeat_task);
-
-        *self.state.write().await = ConnectionState::Open;
+        self.set_manual_disconnect(false).await;
+        self.set_state(ConnectionState::Open).await;
 
         tracing::info!("Connected to WebSocket server");
         Ok(())
@@ -252,14 +393,16 @@ impl RealtimeClient {
 
     /// Disconnect from the WebSocket server
     pub async fn disconnect(&self) -> Result<()> {
-        let mut state = self.state.write().await;
-
-        if *state == ConnectionState::Closed {
-            return Ok(());
+        {
+            let state = self.state.read().await;
+            if *state == ConnectionState::Closed {
+                return Ok(());
+            }
         }
 
-        *state = ConnectionState::Closing;
-        drop(state);
+        self.set_state(ConnectionState::Closing).await;
+        self.set_manual_disconnect(true).await;
+
         tracing::info!("Disconnecting from WebSocket server");
 
         {
@@ -289,8 +432,7 @@ impl RealtimeClient {
             let mut pending_heartbeat_ref = self.pending_heartbeat_ref.write().await;
             *pending_heartbeat_ref = None;
         }
-
-        *self.state.write().await = ConnectionState::Closed;
+        self.set_state(ConnectionState::Closed).await;
         tracing::info!("Disconnected from WebSocket server");
         Ok(())
     }
