@@ -1,6 +1,5 @@
 use crate::SystemEvent;
-use crate::client_state::ClientState;
-use crate::connection::ConnectionManager;
+use crate::client::{ClientState, ConnectionManager};
 use crate::types::message::RealtimeMessage;
 use crate::types::constants::PHOENIX_TOPIC;
 use std::sync::{Arc, Weak};

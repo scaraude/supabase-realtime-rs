@@ -1,6 +1,4 @@
-use crate::client::RealtimeClient;
-use crate::client_state::ClientState;
-use crate::connection::{ConnectionManager, ConnectionState};
+use super::{RealtimeClient, ClientState, ConnectionManager, ConnectionState};
 use crate::types::{RealtimeError, Result};
 use std::sync::Arc;
 use tokio::sync::{watch, RwLock};

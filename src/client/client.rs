@@ -1,9 +1,4 @@
-mod builder;
-
-pub use builder::{RealtimeClientBuilder, RealtimeClientOptions};
-
-use crate::client_state::ClientState;
-use crate::connection::{ConnectionManager, ConnectionState};
+use super::{ClientState, ConnectionManager, ConnectionState, RealtimeClientBuilder, RealtimeClientOptions};
 use crate::heartbeat::HeartbeatManager;
 use crate::router::MessageRouter;
 use crate::timer::Timer;
