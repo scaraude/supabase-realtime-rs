@@ -1,12 +1,3 @@
-/// Channel states
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ChannelState {
-    Closed,
-    Errored,
-    Joined,
-    Joining,
-    Leaving,
-}
 
 /// Phoenix protocol event strings (magic strings layer)
 pub mod phoenix_events {

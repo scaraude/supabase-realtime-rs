@@ -33,7 +33,7 @@ pub mod timer;
 pub mod types;
 pub mod websocket;
 
-pub use channel::{RealtimeChannel, RealtimeChannelOptions};
+pub use channel::{ChannelState, RealtimeChannel, RealtimeChannelOptions};
 pub use client::{
     ClientState, ConnectionManager, ConnectionState, RealtimeClient, RealtimeClientOptions,
 };

@@ -1,7 +1,8 @@
 use crate::client::RealtimeClient;
 use crate::event::ChannelEvent;
 use crate::http::HttpBroadcaster;
-use crate::types::{ChannelState, Result};
+use super::state::ChannelState;
+use crate::types::Result;
 use crate::{RealtimeMessage, SystemEvent};
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc};
