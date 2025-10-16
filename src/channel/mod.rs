@@ -5,4 +5,5 @@ mod state;
 
 // Public API exports
 pub use channel::{RealtimeChannel, RealtimeChannelOptions};
-pub use state::ChannelState;
+pub use push::Push;
+pub use state::{ChannelState, ChannelStatus};

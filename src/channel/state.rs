@@ -1,9 +1,39 @@
-/// Channel states
+use super::push::Push;
+use crate::messaging::ChannelEvent;
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::mpsc;
+
+/// Channel status enum
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ChannelState {
+pub enum ChannelStatus {
     Closed,
     Errored,
     Joined,
     Joining,
     Leaving,
+}
+
+/// Event binding for channel event listeners
+#[derive(Debug)]
+pub struct EventBinding {
+    pub event: ChannelEvent,
+    pub sender: mpsc::Sender<serde_json::Value>,
+}
+
+/// Mutable state for a RealtimeChannel
+pub struct ChannelState {
+    pub status: ChannelStatus,
+    pub bindings: Vec<EventBinding>,
+    pub pending_pushes: HashMap<String, Arc<Push>>,
+}
+
+impl ChannelState {
+    pub fn new() -> Self {
+        Self {
+            status: ChannelStatus::Closed,
+            bindings: Vec::new(),
+            pending_pushes: HashMap::new(),
+        }
+    }
 }

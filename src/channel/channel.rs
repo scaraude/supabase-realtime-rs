@@ -1,4 +1,4 @@
-use super::state::ChannelState;
+use super::state::{ChannelState, ChannelStatus, EventBinding};
 use crate::client::RealtimeClient;
 use crate::infrastructure::HttpBroadcaster;
 use crate::messaging::ChannelEvent;
@@ -6,11 +6,6 @@ use crate::types::Result;
 use crate::{RealtimeMessage, SystemEvent};
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc};
-
-struct EventBinding {
-    event: ChannelEvent,
-    sender: mpsc::Sender<serde_json::Value>,
-}
 
 #[derive(Debug, Clone, Default)]
 pub struct RealtimeChannelOptions {
@@ -25,7 +20,6 @@ pub struct RealtimeChannel {
     client: Arc<RealtimeClient>,
     state: Arc<RwLock<ChannelState>>,
     options: RealtimeChannelOptions,
-    bindings: Arc<RwLock<Vec<EventBinding>>>,
 }
 
 impl RealtimeChannel {
@@ -37,14 +31,13 @@ impl RealtimeChannel {
         Self {
             topic,
             client,
-            state: Arc::new(RwLock::new(ChannelState::Closed)),
+            state: Arc::new(RwLock::new(ChannelState::new())),
             options,
-            bindings: Arc::new(RwLock::new(Vec::new())),
         }
     }
 
     pub async fn was_joined(&self) -> bool {
-        *self.state.read().await == ChannelState::Joined
+        self.state.read().await.status == ChannelStatus::Joined
     }
 
     /// Register an event listener for a specific event type
@@ -55,7 +48,7 @@ impl RealtimeChannel {
             sender: tx,
         };
 
-        self.bindings.write().await.push(binding);
+        self.state.write().await.bindings.push(binding);
 
         rx
     }
@@ -63,8 +56,8 @@ impl RealtimeChannel {
     /// Internal method to trigger events to registered listeners
     pub(crate) async fn _trigger(&self, event: ChannelEvent, payload: serde_json::Value) {
         let event_enum = ChannelEvent::from_str(event.as_str());
-        let bindings = self.bindings.read().await;
-        for binding in bindings.iter() {
+        let state = self.state.read().await;
+        for binding in state.bindings.iter() {
             if binding.event == event_enum {
                 let _ = binding.sender.send(payload.clone()).await;
             }
@@ -75,11 +68,11 @@ impl RealtimeChannel {
     pub async fn subscribe(&self) -> Result<()> {
         let mut state = self.state.write().await;
 
-        if *state == ChannelState::Joined || *state == ChannelState::Joining {
+        if state.status == ChannelStatus::Joined || state.status == ChannelStatus::Joining {
             return Ok(());
         }
 
-        *state = ChannelState::Joining;
+        state.status = ChannelStatus::Joining;
         drop(state);
 
         let join_message = RealtimeMessage::new(
@@ -92,7 +85,7 @@ impl RealtimeChannel {
 
         tracing::info!("Subscribing to channel: {}", self.topic);
 
-        *self.state.write().await = ChannelState::Joined;
+        self.state.write().await.status = ChannelStatus::Joined;
 
         Ok(())
     }
@@ -113,11 +106,11 @@ impl RealtimeChannel {
     pub async fn unsubscribe(&self) -> Result<()> {
         let mut state = self.state.write().await;
 
-        if *state == ChannelState::Closed {
+        if state.status == ChannelStatus::Closed {
             return Ok(());
         }
 
-        *state = ChannelState::Leaving;
+        state.status = ChannelStatus::Leaving;
         drop(state);
 
         let leave_message = RealtimeMessage::new(
@@ -130,7 +123,7 @@ impl RealtimeChannel {
 
         tracing::info!("Unsubscribing from channel: {}", self.topic);
 
-        *self.state.write().await = ChannelState::Closed;
+        self.state.write().await.status = ChannelStatus::Closed;
 
         Ok(())
     }
@@ -138,7 +131,7 @@ impl RealtimeChannel {
     pub async fn send(&self, event: ChannelEvent, payload: serde_json::Value) -> Result<()> {
         let is_joined = {
             let state = self.state.read().await;
-            *state == ChannelState::Joined
+            state.status == ChannelStatus::Joined
         };
 
         let is_connected = self.client.is_connected().await;
