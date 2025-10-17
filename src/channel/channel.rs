@@ -1,9 +1,12 @@
-use super::state::{ChannelState, ChannelStatus, EventBinding};
-use crate::client::RealtimeClient;
+use super::{
+    Push,
+    state::{ChannelState, ChannelStatus, EventBinding},
+};
 use crate::infrastructure::HttpBroadcaster;
 use crate::messaging::ChannelEvent;
 use crate::types::Result;
 use crate::{RealtimeMessage, SystemEvent};
+use crate::{client::RealtimeClient, types::DEFAULT_TIMEOUT};
 use std::sync::Arc;
 use tokio::sync::{RwLock, mpsc};
 
@@ -18,7 +21,7 @@ pub struct RealtimeChannelOptions {
 pub struct RealtimeChannel {
     topic: String,
     client: Arc<RealtimeClient>,
-    state: Arc<RwLock<ChannelState>>,
+    pub(crate) state: Arc<RwLock<ChannelState>>,
     options: RealtimeChannelOptions,
 }
 
@@ -154,5 +157,25 @@ impl RealtimeChannel {
 
     pub fn topic(&self) -> &str {
         &self.topic
+    }
+
+    pub(crate) async fn send_message(&self, message: RealtimeMessage) -> Result<()> {
+        self.client.push(message).await
+    }
+
+    pub fn push(
+        self: &Arc<Self>,
+        event: impl Into<ChannelEvent>,
+        payload: serde_json::Value,
+    ) -> Push {
+        let ref_id = uuid::Uuid::new_v4().to_string();
+        let event = event.into();
+        Push::new(
+            event.as_str().to_string(),
+            payload,
+            ref_id,
+            std::time::Duration::from_millis(DEFAULT_TIMEOUT), // 10 seconds
+            Arc::clone(self),
+        )
     }
 }

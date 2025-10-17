@@ -21,6 +21,7 @@ tokio-tungstenite = { version = "0.28.0", features = ["native-tls"] }
 tracing = "0.1.41"
 tungstenite = "0.28.0"
 url = "2.5.7"
+uuid = {version = "1.18.1", features = ["v4"]}
 
 [dev-dependencies]
 tracing-subscriber = "0.3.20"
