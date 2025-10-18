@@ -23,9 +23,11 @@ A Rust client for [Supabase Realtime](https://supabase.com/docs/guides/realtime)
 - ✅ Automatic reconnection with exponential backoff
 - ✅ Manual vs automatic disconnect detection
 - ✅ Channel re-subscription after reconnect
+- ✅ Push messages with acknowledgments
+- ✅ Callback registration for push responses (ok/error/timeout)
+- ✅ Timeout mechanism for push messages
 - ⏳ Real-time Postgres changes
 - ⏳ Presence tracking
-- ⏳ Push messages with acknowledgments
 
 ## Installation
 
@@ -93,6 +95,9 @@ cargo run --example test_http_fallback
 # Reconnection infrastructure test
 cargo run --example test_reconnection
 
+# Push messages with acknowledgments test
+cargo run --example test_push
+
 # Basic usage example (requires Supabase project)
 cargo run --example basic
 ```
@@ -158,8 +163,10 @@ src/
 - [x] Broadcast messages via WebSocket
 - [x] HTTP fallback for broadcasts
 
-### Phase 5: Advanced Features (Next)
-- [ ] Push messages with acknowledgments
+### Phase 5: Advanced Features (In Progress)
+- [x] Push messages with acknowledgments
+- [x] Callback registration (ok/error/timeout)
+- [x] Timeout mechanism with tokio
 - [ ] Presence tracking
 - [ ] Postgres changes subscription
 - [ ] Access token refresh
@@ -170,6 +177,7 @@ src/
 - [x] Channel subscription tests
 - [x] Broadcast tests
 - [x] Reconnection infrastructure test
+- [x] Push acknowledgment test
 - [ ] Unit tests
 - [ ] Integration tests
 - [ ] Documentation
