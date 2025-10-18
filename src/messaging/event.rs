@@ -2,11 +2,11 @@ use crate::types::constants::{channel_events, phoenix_events};
 use serde::{Deserialize, Serialize};
 
 /// Type-safe channel events
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+///
+/// Serializes as plain strings: "broadcast", "phx_reply", "custom_event", etc.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ChannelEvent {
     /// PostgreSQL database changes
-    #[serde(rename = "postgres_changes")]
     PostgresChanges,
 
     /// Custom broadcast event
@@ -20,6 +20,27 @@ pub enum ChannelEvent {
 
     /// Custom user-defined event
     Custom(String),
+}
+
+// Custom serialization to serialize as string
+impl Serialize for ChannelEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+// Custom deserialization to parse from string
+impl<'de> Deserialize<'de> for ChannelEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(Self::from_str(&s))
+    }
 }
 
 impl ChannelEvent {
