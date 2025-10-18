@@ -61,7 +61,9 @@ impl MessageRouter {
 
         // Find the channel for this topic
         let state = self.state.read().await;
-        let channel = state.channels.iter()
+        let channel = state
+            .channels
+            .iter()
             .find(|ch| ch.topic() == message.topic)
             .cloned();
         drop(state);
@@ -78,12 +80,14 @@ impl MessageRouter {
         drop(channel_state);
 
         // Extract status from payload
-        let status = message.payload
+        let status = message
+            .payload
             .get("status")
             .and_then(|v| v.as_str())
             .unwrap_or("error");
 
-        let response = message.payload
+        let response = message
+            .payload
             .get("response")
             .cloned()
             .unwrap_or(serde_json::Value::Null);
@@ -91,7 +95,11 @@ impl MessageRouter {
         // Trigger the appropriate callback
         push.trigger(status, response);
 
-        tracing::debug!("Handled push reply for ref {} with status {}", ref_id, status);
+        tracing::debug!(
+            "Handled push reply for ref {} with status {}",
+            ref_id,
+            status
+        );
         true
     }
 
