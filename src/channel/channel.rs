@@ -1,6 +1,7 @@
 use super::{
     Push,
     state::{ChannelState, ChannelStatus, EventBinding},
+    config::{JoinPayload, ChannelJoinConfig, BroadcastConfig, PresenceConfig},
 };
 use crate::messaging::ChannelEvent;
 use crate::types::Result;
@@ -126,11 +127,31 @@ impl RealtimeChannel {
         state.status = ChannelStatus::Joining;
         drop(state);
 
+        // Build typed join payload per Supabase protocol
+        // Reference: https://supabase.com/docs/guides/realtime/protocol
+        let payload = JoinPayload {
+            config: ChannelJoinConfig {
+                broadcast: BroadcastConfig {
+                    self_: self.options.broadcast_self,
+                    ack: self.options.broadcast_ack,
+                },
+                presence: PresenceConfig {
+                    key: self.options.presence_key.clone(),
+                    enabled: self.options.presence_key.is_some(),
+                },
+                is_private: self.options.is_private,
+                postgres_changes: None,  // TODO: Populate when postgres_changes bindings exist
+            },
+            access_token: self.client.access_token().map(|s| s.to_string()),
+        };
+
         let join_message = RealtimeMessage::new(
             self.topic.clone(),
             ChannelEvent::System(SystemEvent::Join),
-            serde_json::json!({}),
-        );
+            serde_json::to_value(&payload)?,
+        )
+        .with_ref(self.client.make_ref().await)
+        .with_join_ref(self.client.make_ref().await);
 
         self.client.push(join_message).await?;
 
@@ -225,5 +246,74 @@ impl RealtimeChannel {
             std::time::Duration::from_millis(DEFAULT_TIMEOUT), // 10 seconds
             Arc::clone(self),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_join_payload_serialization() {
+        // Reference: https://supabase.com/docs/guides/realtime/protocol
+        // Verify that JoinPayload serializes to correct format per Supabase docs
+
+        use crate::channel::config::*;
+
+        let payload = JoinPayload {
+            config: ChannelJoinConfig {
+                broadcast: BroadcastConfig {
+                    self_: true,
+                    ack: false,
+                },
+                presence: PresenceConfig {
+                    key: Some("user-123".to_string()),
+                    enabled: true,
+                },
+                is_private: false,
+                postgres_changes: None,
+            },
+            access_token: None,
+        };
+
+        let json = serde_json::to_value(&payload).unwrap();
+
+        // Verify structure matches Supabase protocol
+        assert!(json.get("config").is_some(), "Missing config field");
+
+        let config = json.get("config").unwrap();
+        assert!(config.get("broadcast").is_some(), "Missing broadcast config");
+        assert!(config.get("presence").is_some(), "Missing presence config");
+        assert_eq!(config.get("private").unwrap(), false, "Wrong private value");
+
+        let broadcast = config.get("broadcast").unwrap();
+        assert_eq!(broadcast.get("self").unwrap(), true, "Wrong broadcast.self");
+        assert_eq!(broadcast.get("ack").unwrap(), false, "Wrong broadcast.ack");
+
+        let presence = config.get("presence").unwrap();
+        assert_eq!(presence.get("key").unwrap(), "user-123", "Wrong presence key");
+        assert_eq!(presence.get("enabled").unwrap(), true, "Wrong presence enabled");
+
+        println!("✅ JoinPayload serializes correctly per Supabase protocol");
+        println!("📋 {}", serde_json::to_string_pretty(&json).unwrap());
+    }
+
+    #[test]
+    fn test_message_with_ref_fields() {
+        // Verify that ref and join_ref can be added to messages
+        let message = RealtimeMessage::new(
+            "realtime:test".to_string(),
+            ChannelEvent::System(SystemEvent::Join),
+            serde_json::json!({}),
+        )
+        .with_ref("1".to_string())
+        .with_join_ref("1".to_string());
+
+        assert!(message.r#ref.is_some(), "ref should be set");
+        assert!(message.join_ref.is_some(), "join_ref should be set");
+        assert_eq!(message.r#ref.as_ref().unwrap(), "1");
+        assert_eq!(message.join_ref.as_ref().unwrap(), "1");
+
+        println!("✅ Message with ref fields works correctly");
     }
 }
