@@ -18,6 +18,7 @@ pub enum ChannelStatus {
 #[derive(Debug)]
 pub struct EventBinding {
     pub event: ChannelEvent,
+    pub filter: Option<HashMap<String, String>>,
     pub sender: mpsc::Sender<serde_json::Value>,
 }
 

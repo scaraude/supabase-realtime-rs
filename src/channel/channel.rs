@@ -2,12 +2,12 @@ use super::{
     Push,
     state::{ChannelState, ChannelStatus, EventBinding},
 };
-use crate::infrastructure::HttpBroadcaster;
 use crate::messaging::ChannelEvent;
 use crate::types::Result;
 use crate::{RealtimeMessage, SystemEvent};
+use crate::{channel::PostgresChangesFilter, infrastructure::HttpBroadcaster};
 use crate::{client::RealtimeClient, types::DEFAULT_TIMEOUT};
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{RwLock, mpsc};
 
 #[derive(Debug, Clone, Default)]
@@ -48,6 +48,7 @@ impl RealtimeChannel {
         let (tx, rx) = mpsc::channel(100);
         let binding = EventBinding {
             event: event.into(),
+            filter: None,
             sender: tx,
         };
 
@@ -56,14 +57,61 @@ impl RealtimeChannel {
         rx
     }
 
+    pub async fn on_postgres_changes(
+        &self,
+        filter: PostgresChangesFilter,
+    ) -> mpsc::Receiver<serde_json::Value> {
+        let (tx, rx) = mpsc::channel(100);
+        let binding = EventBinding {
+            event: ChannelEvent::PostgresChanges,
+            filter: Some(filter.to_hash_map()),
+            sender: tx,
+        };
+
+        self.state.write().await.bindings.push(binding);
+
+        rx
+    }
+
+    fn matches_postgres_filter(
+        &self,
+        filter: &HashMap<String, String>,
+        payload: &serde_json::Value,
+    ) -> bool {
+        if let Some(payload_obj) = payload.as_object() {
+            let Some(payload_data) = payload_obj.get("data") else {
+                return false;
+            };
+            for (key, value) in filter.iter() {
+                if let Some(payload_value) = payload_data.get(key) {
+                    if payload_value != value {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+            true
+        } else {
+            false
+        }
+    }
     /// Internal method to trigger events to registered listeners
     pub(crate) async fn _trigger(&self, event: ChannelEvent, payload: serde_json::Value) {
         let event_enum = ChannelEvent::from_str(event.as_str());
         let state = self.state.read().await;
+
         for binding in state.bindings.iter() {
             if binding.event == event_enum {
+                if event_enum == ChannelEvent::PostgresChanges {
+                    if let Some(filters) = &binding.filter {
+                        if !self.matches_postgres_filter(filters, &payload) {
+                            continue;
+                        }
+                    }
+                }
                 let _ = binding.sender.send(payload.clone()).await;
-            }
+            };
         }
     }
 

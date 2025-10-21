@@ -29,7 +29,10 @@ pub mod messaging;
 pub mod types;
 pub mod websocket;
 
-pub use channel::{ChannelState, RealtimeChannel, RealtimeChannelOptions};
+pub use channel::{
+    ChannelState, PostgresChangeEvent, PostgresChangesFilter, RealtimeChannel,
+    RealtimeChannelOptions,
+};
 pub use client::{
     ClientState, ConnectionManager, ConnectionState, RealtimeClient, RealtimeClientOptions,
 };
