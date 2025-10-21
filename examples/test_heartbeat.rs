@@ -3,19 +3,24 @@ use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenvy::dotenv().ok();
     // Initialize tracing to see heartbeat logs
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::DEBUG)
         .init();
 
-    println!("🦀 Testing Heartbeat Mechanism\n");
+    println!("🦀 Testing Heartbeat Mechanism With Supabase Client\n");
 
-    // Create client with 5 second heartbeat (faster for testing)
+    let url = std::env::var("SUPABASE_URL").expect("SUPABASE_URL must be set in .env");
+    let api_key = std::env::var("SUPABASE_API_KEY").expect("SUPABASE_API_KEY must be set in .env");
+
+    println!("📡 Connecting to: {}\n", url);
+
+    // Create client
     let client = RealtimeClient::new(
-        "wss://echo.websocket.org/",
+        &url,
         RealtimeClientOptions {
-            api_key: "test".to_string(),
-            heartbeat_interval: Some(5000), // 5 seconds instead of 25
+            api_key,
             ..Default::default()
         },
     )?
