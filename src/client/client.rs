@@ -130,15 +130,44 @@ impl RealtimeClient {
                 while let Some(msg_result) = read_half.next().await {
                     match msg_result {
                         Ok(msg) => {
-                            tracing::debug!("Received message: {:?}", msg);
-                            if let tokio_tungstenite::tungstenite::Message::Text(text) = msg {
-                                match serde_json::from_str::<RealtimeMessage>(&text) {
-                                    Ok(realtime_msg) => {
-                                        router.route(realtime_msg).await;
+                            use tokio_tungstenite::tungstenite::Message;
+
+                            match msg {
+                                Message::Text(text) => {
+                                    tracing::debug!("Received text message");
+                                    match serde_json::from_str::<RealtimeMessage>(&text) {
+                                        Ok(realtime_msg) => {
+                                            router.route(realtime_msg).await;
+                                        }
+                                        Err(e) => {
+                                            tracing::error!("Failed to parse message: {}", e);
+                                        }
                                     }
-                                    Err(e) => {
-                                        tracing::error!("Failed to parse message: {}", e);
+                                }
+                                Message::Close(frame) => {
+                                    if let Some(close_frame) = frame {
+                                        tracing::error!(
+                                            "Server closed connection: code={:?}, reason='{}'",
+                                            close_frame.code,
+                                            close_frame.reason
+                                        );
+                                    } else {
+                                        tracing::warn!("Server closed connection without close frame");
                                     }
+                                    self_cloned.set_state(ConnectionState::Closed).await;
+                                    break;
+                                }
+                                Message::Ping(data) => {
+                                    tracing::debug!("Received ping ({} bytes)", data.len());
+                                }
+                                Message::Pong(data) => {
+                                    tracing::debug!("Received pong ({} bytes)", data.len());
+                                }
+                                Message::Binary(data) => {
+                                    tracing::warn!("Received unexpected binary message ({} bytes)", data.len());
+                                }
+                                Message::Frame(_) => {
+                                    tracing::debug!("Received raw frame (internal)");
                                 }
                             }
                         }
