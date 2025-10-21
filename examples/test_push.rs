@@ -4,15 +4,24 @@ use supabase_realtime_rs::{
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Load .env file
+    dotenvy::dotenv().ok();
+
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::DEBUG)
         .init();
     println!("🦀 Testing Push\n");
 
+    // Get credentials from environment, fallback to echo server for testing
+    let url = std::env::var("SUPABASE_URL").unwrap_or_else(|_| "wss://echo.websocket.org".to_string());
+    let api_key = std::env::var("SUPABASE_API_KEY").unwrap_or_else(|_| "test".to_string());
+
+    println!("📡 Connecting to: {}\n", url);
+
     let client = RealtimeClient::new(
-        "wss://echo.websocket.org",
+        &url,
         RealtimeClientOptions {
-            api_key: "test".to_string(),
+            api_key,
             heartbeat_interval: Some(30_000),
             ..Default::default()
         },

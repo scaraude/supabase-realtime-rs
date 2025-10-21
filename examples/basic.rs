@@ -2,14 +2,23 @@ use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Load .env file
+    dotenvy::dotenv().ok();
+
     // Initialize tracing
     tracing_subscriber::fmt::init();
 
+    // Get credentials from environment
+    let url = std::env::var("SUPABASE_URL").expect("SUPABASE_URL must be set in .env");
+    let api_key = std::env::var("SUPABASE_API_KEY").expect("SUPABASE_API_KEY must be set in .env");
+
+    println!("📡 Connecting to: {}\n", url);
+
     // Create client
     let client = RealtimeClient::new(
-        "wss://your-project.supabase.co/realtime/v1",
+        &url,
         RealtimeClientOptions {
-            api_key: "your-anon-key".to_string(),
+            api_key,
             ..Default::default()
         },
     )?

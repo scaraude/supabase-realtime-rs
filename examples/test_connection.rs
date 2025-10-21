@@ -3,6 +3,9 @@ use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Load .env file
+    dotenvy::dotenv().ok();
+
     // Initialize tracing to see logs
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::DEBUG)
@@ -10,11 +13,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("🦀 Testing WebSocket Connection\n");
 
-    // Create client (using echo.websocket.org - a public test server)
+    // Get credentials from environment, fallback to echo server for testing
+    let url = std::env::var("SUPABASE_URL").unwrap_or_else(|_| "wss://echo.websocket.org/".to_string());
+    let api_key = std::env::var("SUPABASE_API_KEY").unwrap_or_else(|_| "test".to_string());
+
+    println!("📡 Connecting to: {}\n", url);
+
+    // Create client
     let client = RealtimeClient::new(
-        "wss://echo.websocket.org/",
+        &url,
         RealtimeClientOptions {
-            api_key: "test".to_string(), // Echo server doesn't check this
+            api_key,
             ..Default::default()
         },
     )?
