@@ -131,6 +131,24 @@ impl RealtimeChannel {
         }
 
         state.status = ChannelStatus::Joining;
+
+        // Collect postgres_changes filters from bindings
+        let postgres_changes_configs: Vec<crate::channel::config::PostgresChangesConfig> = state
+            .bindings
+            .iter()
+            .filter(|b| b.event == ChannelEvent::PostgresChanges)
+            .filter_map(|b| {
+                b.filter.as_ref().map(|filter| {
+                    crate::channel::config::PostgresChangesConfig {
+                        event: filter.get("event").cloned().unwrap_or_else(|| "*".to_string()),
+                        schema: filter.get("schema").cloned().unwrap_or_else(|| "public".to_string()),
+                        table: filter.get("table").cloned(),
+                        filter: filter.get("filter").cloned(),
+                    }
+                })
+            })
+            .collect();
+
         drop(state);
 
         // Build typed join payload per Supabase protocol
@@ -146,7 +164,11 @@ impl RealtimeChannel {
                     enabled: self.options.presence_key.is_some(),
                 },
                 is_private: self.options.is_private,
-                postgres_changes: None,  // TODO: Populate when postgres_changes bindings exist
+                postgres_changes: if postgres_changes_configs.is_empty() {
+                    None
+                } else {
+                    Some(postgres_changes_configs)
+                },
             },
             access_token: self.client.access_token().map(|s| s.to_string()),
         };
@@ -159,9 +181,12 @@ impl RealtimeChannel {
         .with_ref(self.client.make_ref().await)
         .with_join_ref(self.client.make_ref().await);
 
-        self.client.push(join_message).await?;
+        tracing::info!("Subscribing to channel: {} with payload: {}",
+            self.topic,
+            serde_json::to_string_pretty(&payload).unwrap_or_default()
+        );
 
-        tracing::info!("Subscribing to channel: {}", self.topic);
+        self.client.push(join_message).await?;
 
         self.state.write().await.status = ChannelStatus::Joined;
 

@@ -134,13 +134,13 @@ impl RealtimeClient {
 
                             match msg {
                                 Message::Text(text) => {
-                                    tracing::debug!("Received text message");
+                                    tracing::debug!("Received text message: {}", text);
                                     match serde_json::from_str::<RealtimeMessage>(&text) {
                                         Ok(realtime_msg) => {
                                             router.route(realtime_msg).await;
                                         }
                                         Err(e) => {
-                                            tracing::error!("Failed to parse message: {}", e);
+                                            tracing::error!("Failed to parse message: {} - Raw: {}", e, text);
                                         }
                                     }
                                 }

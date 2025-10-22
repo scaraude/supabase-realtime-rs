@@ -108,9 +108,17 @@ impl MessageRouter {
 
     /// Routes message to matching channels
     async fn route_to_channels(&self, message: RealtimeMessage) {
+        tracing::debug!(
+            "Routing message: topic={}, event={}, payload={}",
+            message.topic,
+            message.event.as_str(),
+            serde_json::to_string(&message.payload).unwrap_or_default()
+        );
+
         let state = self.state.read().await;
         for channel in state.channels.iter() {
             if channel.topic() == message.topic {
+                tracing::debug!("Triggering event {} on channel {}", message.event.as_str(), channel.topic());
                 channel
                     ._trigger(message.event.clone(), message.payload.clone())
                     .await;
