@@ -47,7 +47,9 @@ impl ClientState {
     /// Notify state change watchers
     pub fn notify_state_change(&self, state: ConnectionState, manual: bool) {
         if let Some(tx) = &self.state_change_tx {
-            let _ = tx.send((state, manual));
+            if let Err(_) = tx.send((state, manual)) {
+                tracing::debug!("State change watcher disconnected, could not notify state: {:?}", state);
+            }
         }
     }
 }

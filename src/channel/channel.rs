@@ -111,7 +111,13 @@ impl RealtimeChannel {
                         }
                     }
                 }
-                let _ = binding.sender.send(payload.clone()).await;
+                if let Err(e) = binding.sender.send(payload.clone()).await {
+                    tracing::warn!(
+                        "Failed to send event '{}' to listener: {}. Channel may be closed or full.",
+                        event.as_str(),
+                        e
+                    );
+                }
             };
         }
     }

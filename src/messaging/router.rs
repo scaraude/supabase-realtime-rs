@@ -84,7 +84,10 @@ impl MessageRouter {
             .payload
             .get("status")
             .and_then(|v| v.as_str())
-            .unwrap_or("error");
+            .unwrap_or_else(|| {
+                tracing::debug!("Push reply missing 'status' field, defaulting to 'error'");
+                "error"
+            });
 
         let response = message
             .payload
