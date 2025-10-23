@@ -48,3 +48,37 @@ pub struct JoinPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub access_token: Option<String>,
 }
+
+/// Postgres changes event types
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum PostgresEventType {
+    Insert,
+    Update,
+    Delete,
+}
+
+/// Postgres changes data (inside message payload)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PostgresChangesData {
+    #[serde(rename = "type")]
+    pub event_type: PostgresEventType,
+    pub schema: String,
+    pub table: String,
+    pub commit_timestamp: String,
+    #[serde(default)]
+    pub errors: Option<Vec<String>>,
+    /// New record data (for INSERT/UPDATE)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub new: Option<serde_json::Value>,
+    /// Old record data (for UPDATE/DELETE)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub old: Option<serde_json::Value>,
+}
+
+/// Full postgres changes message payload
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PostgresChangesPayload {
+    pub ids: Vec<i32>,
+    pub data: PostgresChangesData,
+}

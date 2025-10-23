@@ -1,7 +1,10 @@
 use super::{
     Push,
+    config::{
+        BroadcastConfig, ChannelJoinConfig, JoinPayload, PostgresChangesPayload, PostgresEventType,
+        PresenceConfig,
+    },
     state::{ChannelState, ChannelStatus, EventBinding},
-    config::{JoinPayload, ChannelJoinConfig, BroadcastConfig, PresenceConfig},
 };
 use crate::messaging::ChannelEvent;
 use crate::types::Result;
@@ -77,25 +80,42 @@ impl RealtimeChannel {
     fn matches_postgres_filter(
         &self,
         filter: &HashMap<String, String>,
-        payload: &serde_json::Value,
+        payload: &PostgresChangesPayload,
     ) -> bool {
-        if let Some(payload_obj) = payload.as_object() {
-            let Some(payload_data) = payload_obj.get("data") else {
-                return false;
-            };
-            for (key, value) in filter.iter() {
-                if let Some(payload_value) = payload_data.get(key) {
-                    if payload_value != value {
+        for (key, value) in filter.iter() {
+            match key.as_str() {
+                "event" => {
+                    // "*" matches all events
+                    if value == "*" {
+                        continue;
+                    }
+                    // Map filter "event" key to payload.data.type field
+                    let event_str = match payload.data.event_type {
+                        PostgresEventType::Insert => "INSERT",
+                        PostgresEventType::Update => "UPDATE",
+                        PostgresEventType::Delete => "DELETE",
+                    };
+                    if event_str != value {
                         return false;
                     }
-                } else {
+                }
+                "schema" => {
+                    if &payload.data.schema != value {
+                        return false;
+                    }
+                }
+                "table" => {
+                    if &payload.data.table != value {
+                        return false;
+                    }
+                }
+                _ => {
+                    // Unknown filter key - could be a custom filter field
                     return false;
                 }
             }
-            true
-        } else {
-            false
         }
+        true
     }
     /// Internal method to trigger events to registered listeners
     pub(crate) async fn _trigger(&self, event: ChannelEvent, payload: serde_json::Value) {
@@ -106,8 +126,20 @@ impl RealtimeChannel {
             if binding.event == event_enum {
                 if event_enum == ChannelEvent::PostgresChanges {
                     if let Some(filters) = &binding.filter {
-                        if !self.matches_postgres_filter(filters, &payload) {
-                            continue;
+                        // Deserialize payload to typed struct for filtering
+                        match serde_json::from_value::<PostgresChangesPayload>(payload.clone()) {
+                            Ok(typed_payload) => {
+                                if !self.matches_postgres_filter(filters, &typed_payload) {
+                                    continue;
+                                }
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    "Failed to deserialize postgres_changes payload: {}. Skipping filter.",
+                                    e
+                                );
+                                continue;
+                            }
                         }
                     }
                 }
@@ -138,14 +170,20 @@ impl RealtimeChannel {
             .iter()
             .filter(|b| b.event == ChannelEvent::PostgresChanges)
             .filter_map(|b| {
-                b.filter.as_ref().map(|filter| {
-                    crate::channel::config::PostgresChangesConfig {
-                        event: filter.get("event").cloned().unwrap_or_else(|| "*".to_string()),
-                        schema: filter.get("schema").cloned().unwrap_or_else(|| "public".to_string()),
+                b.filter
+                    .as_ref()
+                    .map(|filter| crate::channel::config::PostgresChangesConfig {
+                        event: filter
+                            .get("event")
+                            .cloned()
+                            .unwrap_or_else(|| "*".to_string()),
+                        schema: filter
+                            .get("schema")
+                            .cloned()
+                            .unwrap_or_else(|| "public".to_string()),
                         table: filter.get("table").cloned(),
                         filter: filter.get("filter").cloned(),
-                    }
-                })
+                    })
             })
             .collect();
 
@@ -181,10 +219,7 @@ impl RealtimeChannel {
         .with_ref(self.client.make_ref().await)
         .with_join_ref(self.client.make_ref().await);
 
-        tracing::info!("Subscribing to channel: {} with payload: {}",
-            self.topic,
-            serde_json::to_string_pretty(&payload).unwrap_or_default()
-        );
+        tracing::info!("Subscribing to channel: {}", self.topic,);
 
         self.client.push(join_message).await?;
 
@@ -313,7 +348,10 @@ mod tests {
         assert!(json.get("config").is_some(), "Missing config field");
 
         let config = json.get("config").unwrap();
-        assert!(config.get("broadcast").is_some(), "Missing broadcast config");
+        assert!(
+            config.get("broadcast").is_some(),
+            "Missing broadcast config"
+        );
         assert!(config.get("presence").is_some(), "Missing presence config");
         assert_eq!(config.get("private").unwrap(), false, "Wrong private value");
 
@@ -322,8 +360,16 @@ mod tests {
         assert_eq!(broadcast.get("ack").unwrap(), false, "Wrong broadcast.ack");
 
         let presence = config.get("presence").unwrap();
-        assert_eq!(presence.get("key").unwrap(), "user-123", "Wrong presence key");
-        assert_eq!(presence.get("enabled").unwrap(), true, "Wrong presence enabled");
+        assert_eq!(
+            presence.get("key").unwrap(),
+            "user-123",
+            "Wrong presence key"
+        );
+        assert_eq!(
+            presence.get("enabled").unwrap(),
+            true,
+            "Wrong presence enabled"
+        );
 
         println!("✅ JoinPayload serializes correctly per Supabase protocol");
         println!("📋 {}", serde_json::to_string_pretty(&json).unwrap());

@@ -127,6 +127,7 @@ impl RealtimeClient {
         {
             let mut state = self.state.write().await;
             state.task_manager.spawn(async move {
+                tracing::info!("Starting read task");
                 while let Some(msg_result) = read_half.next().await {
                     match msg_result {
                         Ok(msg) => {
@@ -137,10 +138,21 @@ impl RealtimeClient {
                                     tracing::debug!("Received text message: {}", text);
                                     match serde_json::from_str::<RealtimeMessage>(&text) {
                                         Ok(realtime_msg) => {
+                                            tracing::debug!(
+                                                "Parsed message: topic={}, event={}, payload={}",
+                                                realtime_msg.topic,
+                                                realtime_msg.event.as_str(),
+                                                serde_json::to_string(&realtime_msg.payload)
+                                                    .unwrap_or_default()
+                                            );
                                             router.route(realtime_msg).await;
                                         }
                                         Err(e) => {
-                                            tracing::error!("Failed to parse message: {} - Raw: {}", e, text);
+                                            tracing::error!(
+                                                "Failed to parse message: {} - Raw: {}",
+                                                e,
+                                                text
+                                            );
                                         }
                                     }
                                 }
@@ -152,7 +164,9 @@ impl RealtimeClient {
                                             close_frame.reason
                                         );
                                     } else {
-                                        tracing::warn!("Server closed connection without close frame");
+                                        tracing::warn!(
+                                            "Server closed connection without close frame"
+                                        );
                                     }
                                     self_cloned.set_state(ConnectionState::Closed).await;
                                     break;
@@ -164,7 +178,10 @@ impl RealtimeClient {
                                     tracing::debug!("Received pong ({} bytes)", data.len());
                                 }
                                 Message::Binary(data) => {
-                                    tracing::warn!("Received unexpected binary message ({} bytes)", data.len());
+                                    tracing::warn!(
+                                        "Received unexpected binary message ({} bytes)",
+                                        data.len()
+                                    );
                                 }
                                 Message::Frame(_) => {
                                     tracing::debug!("Received raw frame (internal)");
@@ -264,8 +281,7 @@ impl RealtimeClient {
 
         // Add required query parameters
         url.query_pairs_mut()
-            .append_pair("apikey", &self.options.api_key)
-            .append_pair("vsn", "1.0.0");
+            .append_pair("apikey", &self.options.api_key);
 
         Ok(url.to_string())
     }
