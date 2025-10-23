@@ -26,7 +26,7 @@ A Rust client for [Supabase Realtime](https://supabase.com/docs/guides/realtime)
 - ✅ Push messages with acknowledgments
 - ✅ Callback registration for push responses (ok/error/timeout)
 - ✅ Timeout mechanism for push messages
-- ⏳ Real-time Postgres changes
+- ✅ Postgres changes subscription (basic filtering)
 - ⏳ Presence tracking
 
 ## Installation
@@ -98,6 +98,9 @@ cargo run --example test_reconnection
 # Push messages with acknowledgments test
 cargo run --example test_push
 
+# Postgres changes (database events) test
+cargo run --example test_postgres_changes
+
 # Basic usage example (requires Supabase project)
 cargo run --example basic
 ```
@@ -167,8 +170,8 @@ src/
 - [x] Push messages with acknowledgments
 - [x] Callback registration (ok/error/timeout)
 - [x] Timeout mechanism with tokio
+- [x] Postgres changes subscription (basic filtering)
 - [ ] Presence tracking
-- [ ] Postgres changes subscription
 - [ ] Access token refresh
 
 ### Phase 6: Testing & Polish
@@ -178,6 +181,7 @@ src/
 - [x] Broadcast tests
 - [x] Reconnection infrastructure test
 - [x] Push acknowledgment test
+- [x] Postgres changes test
 - [ ] Unit tests
 - [ ] Integration tests
 - [ ] Documentation
