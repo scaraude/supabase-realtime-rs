@@ -12,10 +12,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
     // Get credentials from environment
-    let url = std::env::var("SUPABASE_URL")
-        .expect("SUPABASE_URL must be set in .env");
-    let api_key = std::env::var("SUPABASE_API_KEY")
-        .expect("SUPABASE_API_KEY must be set in .env");
+    let url = std::env::var("SUPABASE_URL").expect("SUPABASE_URL must be set in .env");
+    let api_key = std::env::var("SUPABASE_API_KEY").expect("SUPABASE_API_KEY must be set in .env");
 
     println!("📡 Connecting to: {}\n", url);
 
@@ -69,7 +67,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Listening for INSERT events on users table...");
         while let Some(payload) = insert_rx.recv().await {
             println!(
-                "🆕 INSERT on users: {}",
+                "[{}] 🆕 INSERT on users: {}",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
                 serde_json::to_string_pretty(&payload).unwrap()
             );
         }
@@ -79,7 +78,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Listening for UPDATE events on users table...");
         while let Some(payload) = update_rx.recv().await {
             println!(
-                "📝 UPDATE on users: {}",
+                "[{}] 📝 UPDATE on users: {}",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
                 serde_json::to_string_pretty(&payload).unwrap()
             );
         }
@@ -89,7 +89,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Listening for DELETE events on users table...");
         while let Some(payload) = delete_rx.recv().await {
             println!(
-                "🗑️  DELETE on users: {}",
+                "[{}] 🗑️  DELETE on users: {}",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
                 serde_json::to_string_pretty(&payload).unwrap()
             );
         }
@@ -99,7 +100,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Listening for ALL events on posts table...");
         while let Some(payload) = posts_rx.recv().await {
             println!(
-                "📬 Event on posts: {}",
+                "[{}] 📬 Event on posts: {}",
+                chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f"),
                 serde_json::to_string_pretty(&payload).unwrap()
             );
         }
