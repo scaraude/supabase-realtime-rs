@@ -2,6 +2,7 @@
 mod channel;
 mod config;
 mod postgres_changes;
+mod presence;
 pub mod push;
 mod state;
 // Public API exports
