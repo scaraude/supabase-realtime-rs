@@ -109,7 +109,7 @@ impl RealtimeClient {
 
         // Build WebSocket URL with query parameters
         let url = self.build_endpoint_url()?;
-        tracing::info!("Connecting to {}", url);
+        tracing::info!("Connecting to {}", &self.endpoint);
 
         // Create WebSocket connection
         let ws_stream = WebSocketFactory::create(url).await?;
