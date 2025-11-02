@@ -6,10 +6,10 @@ use super::{
     },
     state::{ChannelState, ChannelStatus, EventBinding},
 };
-use crate::messaging::ChannelEvent;
 use crate::types::Result;
 use crate::{RealtimeMessage, SystemEvent};
 use crate::{channel::PostgresChangesFilter, infrastructure::HttpBroadcaster};
+use crate::{channel::PresenceMeta, messaging::ChannelEvent};
 use crate::{client::RealtimeClient, types::DEFAULT_TIMEOUT};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{RwLock, mpsc};
@@ -117,6 +117,7 @@ impl RealtimeChannel {
         }
         true
     }
+
     /// Internal method to trigger events to registered listeners
     pub(crate) async fn _trigger(&self, event: ChannelEvent, payload: serde_json::Value) {
         let event_enum = ChannelEvent::from_str(event.as_str());
@@ -312,6 +313,16 @@ impl RealtimeChannel {
             std::time::Duration::from_millis(DEFAULT_TIMEOUT), // 10 seconds
             Arc::clone(self),
         )
+    }
+
+    pub async fn presence_list(&self) -> Vec<(String, Vec<PresenceMeta>)> {
+        let state = self.state.read().await;
+        state
+            .presence
+            .list()
+            .into_iter()
+            .map(|(user_id, metas)| (user_id.clone(), metas.clone()))
+            .collect()
     }
 }
 
