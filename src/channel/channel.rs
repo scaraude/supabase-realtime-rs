@@ -212,19 +212,22 @@ impl RealtimeChannel {
             access_token: self.client.access_token().map(|s| s.to_string()),
         };
 
+        let join_ref = self.client.make_ref().await;
         let join_message = RealtimeMessage::new(
             self.topic.clone(),
             ChannelEvent::System(SystemEvent::Join),
             serde_json::to_value(&payload)?,
         )
         .with_ref(self.client.make_ref().await)
-        .with_join_ref(self.client.make_ref().await);
+        .with_join_ref(join_ref.clone());
 
         tracing::info!("Subscribing to channel: {}", self.topic,);
 
         self.client.push(join_message).await?;
 
-        self.state.write().await.status = ChannelStatus::Joined;
+        let mut state = self.state.write().await;
+        state.status = ChannelStatus::Joined;
+        state.join_ref = Some(join_ref);
 
         Ok(())
     }
@@ -323,6 +326,25 @@ impl RealtimeChannel {
             .into_iter()
             .map(|(user_id, metas)| (user_id.clone(), metas.clone()))
             .collect()
+    }
+
+    pub async fn track(self: &Arc<Self>, metadata: serde_json::Value) -> Result<()> {
+        let payload = serde_json::json!({
+            "type": "presence",
+            "event" : "track",
+            "payload": metadata,
+        });
+
+        self.push("presence", payload).send().await
+    }
+
+    pub async fn untrack(self: &Arc<Self>) -> Result<()> {
+        let payload = serde_json::json!({
+            "type": "presence",
+            "event": "untrack",
+        });
+
+        self.push("presence", payload).send().await
     }
 }
 

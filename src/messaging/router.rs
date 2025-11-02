@@ -83,13 +83,21 @@ impl MessageRouter {
                 if let Some(server_presence_state) =
                     serde_json::from_value::<RawPresenceState>(message.payload.clone()).ok()
                 {
-                    let Some(join_ref) = message.join_ref.clone() else {
+                    // Get join_ref from channel state (stored during subscribe)
+                    let Some(join_ref) = channel_state.join_ref.clone() else {
                         tracing::warn!(
-                            "PresenceState message missing join_ref for topic: {}",
+                            "Channel has no join_ref for presence_state on topic: {}",
                             message.topic
                         );
                         return false;
                     };
+
+                    tracing::debug!(
+                        "Syncing presence_state for topic {} with join_ref: {}",
+                        message.topic,
+                        join_ref
+                    );
+
                     channel_state
                         .presence
                         .sync_state(server_presence_state, join_ref);
@@ -110,7 +118,7 @@ impl MessageRouter {
                 {
                     let has_pending_sync = channel_state
                         .presence
-                        .in_pending_sync_state(message.join_ref.as_deref());
+                        .in_pending_sync_state(channel_state.join_ref.as_deref());
                     if has_pending_sync {
                         channel_state
                             .presence

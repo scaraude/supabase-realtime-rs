@@ -29,6 +29,7 @@ pub struct ChannelState {
     pub bindings: Vec<EventBinding>,
     pub pending_pushes: HashMap<String, Arc<Push>>,
     pub presence: Presence,
+    pub join_ref: Option<String>,
 }
 
 impl ChannelState {
@@ -38,6 +39,7 @@ impl ChannelState {
             bindings: Vec::new(),
             pending_pushes: HashMap::new(),
             presence: Presence::default(),
+            join_ref: None,
         }
     }
 }
