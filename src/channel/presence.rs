@@ -102,6 +102,37 @@ impl Presence {
 
         PresenceChanges { joins, leaves }
     }
+    pub fn sync_diff(&mut self, diff: PresenceDiff) -> PresenceChanges {
+        let joins: PresenceState = Self::transform_state(diff.joins.clone());
+        let leaves: PresenceState = Self::transform_state(diff.leaves.clone());
+
+        joins.iter().for_each(|(key, metas)| {
+            let current_meta = self.state.entry(key.clone()).or_insert_with(Vec::new);
+
+            let new_refs: Vec<&str> = metas
+                .iter()
+                .map(|meta| meta.presence_ref.as_str())
+                .collect();
+            current_meta.retain(|meta| !new_refs.contains(&meta.presence_ref.as_str()));
+            current_meta.extend_from_slice(metas);
+        });
+
+        leaves.iter().for_each(|(key, metas)| {
+            if let Some(current_meta) = self.state.get_mut(key) {
+                let remove_refs: Vec<&str> = metas
+                    .iter()
+                    .map(|meta| meta.presence_ref.as_str())
+                    .collect();
+                current_meta.retain(|meta| !remove_refs.contains(&meta.presence_ref.as_str()));
+
+                if current_meta.is_empty() {
+                    self.state.remove(key);
+                }
+            }
+        });
+
+        PresenceChanges { joins, leaves }
+    }
 
     fn transform_state(raw_state: RawPresenceState) -> PresenceState {
         raw_state
