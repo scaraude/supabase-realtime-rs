@@ -1,4 +1,3 @@
-
 /// Phoenix protocol event strings (magic strings layer)
 pub mod phoenix_events {
     pub const CLOSE: &str = "phx_close";
@@ -18,6 +17,8 @@ pub mod channel_events {
     pub const POSTGRES_CHANGES: &str = "postgres_changes";
     pub const BROADCAST: &str = "broadcast";
     pub const PRESENCE: &str = "presence";
+    pub const PRESENCE_STATE: &str = "presence_state";
+    pub const PRESENCE_DIFF: &str = "presence_diff";
 }
 
 /// WebSocket transport

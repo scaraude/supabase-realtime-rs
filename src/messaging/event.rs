@@ -13,7 +13,8 @@ pub enum ChannelEvent {
     Broadcast,
 
     /// Presence tracking events
-    Presence,
+    PresenceState,
+    PresenceDiff,
 
     /// System events (phx_*)
     System(SystemEvent),
@@ -49,7 +50,8 @@ impl ChannelEvent {
         match s {
             channel_events::POSTGRES_CHANGES => Self::PostgresChanges,
             channel_events::BROADCAST => Self::Broadcast,
-            channel_events::PRESENCE => Self::Presence,
+            channel_events::PRESENCE_STATE => Self::PresenceState,
+            channel_events::PRESENCE_DIFF => Self::PresenceDiff,
             _ if s.starts_with("phx_") || s == phoenix_events::HEARTBEAT => {
                 Self::System(SystemEvent::from_str(s))
             }
@@ -62,7 +64,8 @@ impl ChannelEvent {
         match self {
             Self::PostgresChanges => channel_events::POSTGRES_CHANGES,
             Self::Broadcast => channel_events::BROADCAST,
-            Self::Presence => channel_events::PRESENCE,
+            Self::PresenceState => channel_events::PRESENCE_STATE,
+            Self::PresenceDiff => channel_events::PRESENCE_DIFF,
             Self::System(sys) => sys.as_str(),
             Self::Custom(s) => s,
         }
@@ -190,7 +193,14 @@ mod tests {
             ChannelEvent::PostgresChanges
         );
         assert_eq!(ChannelEvent::from_str("broadcast"), ChannelEvent::Broadcast);
-        assert_eq!(ChannelEvent::from_str("presence"), ChannelEvent::Presence);
+        assert_eq!(
+            ChannelEvent::from_str("presence_state"),
+            ChannelEvent::PresenceState
+        );
+        assert_eq!(
+            ChannelEvent::from_str("presence_diff"),
+            ChannelEvent::PresenceDiff
+        );
         assert_eq!(
             ChannelEvent::from_str("phx_join"),
             ChannelEvent::System(SystemEvent::Join)
