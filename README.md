@@ -27,7 +27,7 @@ A Rust client for [Supabase Realtime](https://supabase.com/docs/guides/realtime)
 - ✅ Callback registration for push responses (ok/error/timeout)
 - ✅ Timeout mechanism for push messages
 - ✅ Postgres changes subscription (basic filtering)
-- ⏳ Presence tracking
+- 🚧 Presence tracking (core types and sync logic implemented)
 
 ## Installation
 
