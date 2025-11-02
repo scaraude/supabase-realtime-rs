@@ -1,5 +1,6 @@
 use super::SystemEvent;
 use crate::ChannelEvent;
+use crate::channel::{RawPresenceDiff, RawPresenceState};
 use crate::client::ClientState;
 use crate::types::constants::PHOENIX_TOPIC;
 use crate::types::message::RealtimeMessage;
@@ -30,6 +31,12 @@ impl MessageRouter {
             }
         }
 
+        if message.event == ChannelEvent::PresenceDiff
+            || message.event == ChannelEvent::PresenceState
+        {
+            self.handle_presence(&message).await;
+        }
+
         // Route to channels
         self.route_to_channels(message).await;
     }
@@ -50,6 +57,74 @@ impl MessageRouter {
                 tracing::debug!("Received heartbeat ack for ref {}", msg_ref);
             }
         }
+    }
+
+    async fn handle_presence(&self, message: &RealtimeMessage) -> bool {
+        let state = self.state.read().await;
+        let channels = state
+            .channels
+            .iter()
+            .find(|channel| channel.topic() == message.topic)
+            .cloned();
+        drop(state);
+
+        let Some(channel) = channels else {
+            tracing::warn!(
+                "Received presence message for unknown channel topic: {}",
+                message.topic
+            );
+            return false;
+        };
+
+        let mut channel_state = channel.state.write().await;
+
+        match message.event {
+            ChannelEvent::PresenceState => {
+                if let Some(server_presence_state) =
+                    serde_json::from_value::<RawPresenceState>(message.payload.clone()).ok()
+                {
+                    let Some(join_ref) = message.join_ref.clone() else {
+                        tracing::warn!(
+                            "PresenceState message missing join_ref for topic: {}",
+                            message.topic
+                        );
+                        return false;
+                    };
+                    channel_state
+                        .presence
+                        .sync_state(server_presence_state, join_ref);
+                    let pending_diffs = channel_state.presence.flush_pending_diffs();
+                    if !pending_diffs.is_empty() {
+                        tracing::debug!(
+                            "Flushed {} pending presence diffs after state sync on topic: {}",
+                            pending_diffs.len(),
+                            message.topic
+                        );
+                    }
+                    return true;
+                }
+            }
+            ChannelEvent::PresenceDiff => {
+                if let Some(server_presence_diff) =
+                    serde_json::from_value::<RawPresenceDiff>(message.payload.clone()).ok()
+                {
+                    let has_pending_sync = channel_state
+                        .presence
+                        .in_pending_sync_state(message.join_ref.as_deref());
+                    if has_pending_sync {
+                        channel_state
+                            .presence
+                            .add_pending_diff(server_presence_diff);
+                    } else {
+                        channel_state.presence.sync_diff(server_presence_diff);
+                    }
+                    return true;
+                }
+            }
+            _ => {}
+        }
+
+        false
     }
 
     /// Handles push reply by matching ref to pending push
@@ -118,7 +193,11 @@ impl MessageRouter {
         let state = self.state.read().await;
         for channel in state.channels.iter() {
             if channel.topic() == message.topic {
-                tracing::debug!("Triggering event {} on channel {}", message.event.as_str(), channel.topic());
+                tracing::debug!(
+                    "Triggering event {} on channel {}",
+                    message.event.as_str(),
+                    channel.topic()
+                );
                 channel
                     ._trigger(message.event.clone(), message.payload.clone())
                     .await;
