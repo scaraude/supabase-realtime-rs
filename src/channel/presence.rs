@@ -28,7 +28,7 @@ pub struct PresenceMeta {
 pub type PresenceState = HashMap<String, Vec<PresenceMeta>>;
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct PresenceDiff {
+pub struct RawPresenceDiff {
     pub joins: RawPresenceState,
     pub leaves: RawPresenceState,
 }
@@ -36,7 +36,7 @@ pub struct PresenceDiff {
 #[derive(Debug, Clone)]
 pub struct Presence {
     state: PresenceState,
-    pending_diffs: Vec<PresenceDiff>,
+    pending_diffs: Vec<RawPresenceDiff>,
     join_ref: Option<String>,
 }
 
@@ -70,7 +70,7 @@ impl Presence {
         }
     }
 
-    pub fn add_pending_diff(&mut self, diff: PresenceDiff) {
+    pub fn add_pending_diff(&mut self, diff: RawPresenceDiff) {
         self.pending_diffs.push(diff);
     }
 
@@ -135,7 +135,7 @@ impl Presence {
 
         PresenceChanges { joins, leaves }
     }
-    pub fn sync_diff(&mut self, diff: PresenceDiff) -> PresenceChanges {
+    pub fn sync_diff(&mut self, diff: RawPresenceDiff) -> PresenceChanges {
         let joins: PresenceState = Self::transform_state(diff.joins.clone());
         let leaves: PresenceState = Self::transform_state(diff.leaves.clone());
 
