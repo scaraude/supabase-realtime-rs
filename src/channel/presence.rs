@@ -46,6 +46,39 @@ pub struct PresenceChanges {
 }
 
 impl Presence {
+    pub fn new() -> Self {
+        Self {
+            state: HashMap::new(),
+            pending_diffs: Vec::new(),
+            join_ref: None,
+        }
+    }
+
+    pub fn state(&self) -> &PresenceState {
+        &self.state
+    }
+
+    pub fn list(&self) -> Vec<(&String, &Vec<PresenceMeta>)> {
+        self.state.iter().collect()
+    }
+
+    pub fn in_pending_sync_state(&self, server_join_ref: Option<&str>) -> bool {
+        match (&self.join_ref, server_join_ref) {
+            (None, _) => true,
+            (Some(client_join_ref), Some(server_join_ref)) => server_join_ref != client_join_ref,
+            (Some(_), None) => true,
+        }
+    }
+
+    pub fn add_pending_diff(&mut self, diff: PresenceDiff) {
+        self.pending_diffs.push(diff);
+    }
+
+    pub fn flush_pending_diffs(&mut self) -> Vec<PresenceChanges> {
+        let diffs = std::mem::take(&mut self.pending_diffs);
+        diffs.into_iter().map(|diff| self.sync_diff(diff)).collect()
+    }
+
     pub fn sync_state(&mut self, new_state: RawPresenceState, join_ref: String) -> PresenceChanges {
         let new_state: PresenceState = Self::transform_state(new_state);
         let new_presence_refs: HashSet<&String> = new_state
@@ -149,5 +182,11 @@ impl Presence {
                 (key, entries)
             })
             .collect()
+    }
+}
+
+impl Default for Presence {
+    fn default() -> Self {
+        Self::new()
     }
 }
