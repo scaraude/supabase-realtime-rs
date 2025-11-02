@@ -1,4 +1,5 @@
 use super::push::Push;
+use crate::channel::presence::Presence;
 use crate::messaging::ChannelEvent;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -27,6 +28,7 @@ pub struct ChannelState {
     pub status: ChannelStatus,
     pub bindings: Vec<EventBinding>,
     pub pending_pushes: HashMap<String, Arc<Push>>,
+    pub presence: Presence,
 }
 
 impl ChannelState {
@@ -35,6 +37,7 @@ impl ChannelState {
             status: ChannelStatus::Closed,
             bindings: Vec::new(),
             pending_pushes: HashMap::new(),
+            presence: Presence::default(),
         }
     }
 }
