@@ -27,7 +27,7 @@ A Rust client for [Supabase Realtime](https://supabase.com/docs/guides/realtime)
 - ✅ Callback registration for push responses (ok/error/timeout)
 - ✅ Timeout mechanism for push messages
 - ✅ Postgres changes subscription (basic filtering)
-- 🚧 Presence tracking (core types and sync logic implemented)
+- ✅ Presence tracking (full integration with state sync, joins/leaves, track/untrack)
 
 ## Installation
 
@@ -101,6 +101,12 @@ cargo run --example test_push
 # Postgres changes (database events) test
 cargo run --example test_postgres_changes
 
+# Presence tracking test (single user)
+cargo run --example test_presence
+
+# Presence tracking test (multi-user simulation)
+cargo run --example test_presence_multiuser
+
 # Basic usage example (requires Supabase project)
 cargo run --example basic
 ```
@@ -166,15 +172,20 @@ src/
 - [x] Broadcast messages via WebSocket
 - [x] HTTP fallback for broadcasts
 
-### Phase 5: Advanced Features (In Progress)
+### Phase 5: Advanced Features ✅ COMPLETE
 - [x] Push messages with acknowledgments
 - [x] Callback registration (ok/error/timeout)
 - [x] Timeout mechanism with tokio
 - [x] Postgres changes subscription (basic filtering)
-- [ ] Presence tracking
-- [ ] Access token refresh
+- [x] Presence tracking (state sync, joins/leaves, track/untrack)
 
-### Phase 6: Testing & Polish
+### Phase 6: Polish & Open Source Prep (In Progress)
+- [ ] Access token refresh
+- [ ] Comprehensive API documentation
+- [ ] CI/CD setup (GitHub Actions)
+- [ ] More examples and use cases
+
+### Phase 7: Testing & Polish
 - [x] Basic connection tests
 - [x] Heartbeat tests
 - [x] Channel subscription tests
@@ -182,6 +193,7 @@ src/
 - [x] Reconnection infrastructure test
 - [x] Push acknowledgment test
 - [x] Postgres changes test
+- [x] Presence tracking tests (single and multi-user)
 - [ ] Unit tests
 - [ ] Integration tests
 - [ ] Documentation
