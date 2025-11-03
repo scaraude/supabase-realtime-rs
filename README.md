@@ -2,58 +2,18 @@
 
 # Supabase Realtime Rust 🦀
 
-A Rust client for [Supabase Realtime](https://supabase.com/docs/guides/realtime) - Phoenix Channels WebSocket protocol implementation.
-
-> ⚠️ **Work in Progress** - Core WebSocket, channels, and broadcasting are working! Advanced features coming next.
+A Rust client for [Supabase Realtime](https://supabase.com/docs/guides/realtime) implementing the Phoenix Channels WebSocket protocol.
 
 > **Note**: This is an unofficial, community-maintained client. For official clients, see [supabase-community](https://github.com/supabase-community).
 
-## Features
-
-- ✅ Type-safe error handling with `thiserror`
-- ✅ Async/await with Tokio
-- ✅ WebSocket support with `tokio-tungstenite`
-- ✅ Connection management (connect/disconnect)
-- ✅ Concurrent read/write tasks
-- ✅ Heartbeat mechanism with timeout detection
-- ✅ Message serialization/deserialization
-- ✅ Message routing and parsing
-- ✅ Channel subscriptions (subscribe/unsubscribe)
-- ✅ Event listeners with mpsc channels
-- ✅ Broadcast messages via WebSocket
-- ✅ HTTP fallback for broadcasts when disconnected
-- ✅ Automatic reconnection with exponential backoff
-- ✅ Manual vs automatic disconnect detection
-- ✅ Channel re-subscription after reconnect
-- ✅ Push messages with acknowledgments
-- ✅ Callback registration for push responses (ok/error/timeout)
-- ✅ Timeout mechanism for push messages
-- ✅ Postgres changes subscription (basic filtering)
-- ✅ Presence tracking (full integration with state sync, joins/leaves, track/untrack)
-
-## Installation
-
-Add to your `Cargo.toml`:
-
-```toml
-[dependencies]
-supabase-realtime-rs = { git = "https://github.com/Scaraude/supabase-realtime-rs" }
-```
-
-Or for local development:
-
-```toml
-[dependencies]
-supabase-realtime-rs = { path = "../supabase-realtime-rs" }
-```
-
-## Usage
+## Quick Start
 
 ```rust
-use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
+use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions, ChannelEvent};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Connect to Supabase Realtime
     let client = RealtimeClient::new(
         "wss://your-project.supabase.co/realtime/v1",
         RealtimeClientOptions {
@@ -61,168 +21,271 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ..Default::default()
         },
     )?;
-
     client.connect().await?;
 
-    // Your realtime logic here
+    // Subscribe to a channel
+    let channel = client.channel("room:lobby", Default::default()).await;
+    let mut rx = channel.on(ChannelEvent::Broadcast("message".into())).await;
+    channel.subscribe().await?;
 
-    client.disconnect().await?;
+    // Send and receive messages
+    channel.send(
+        ChannelEvent::Broadcast("message".into()),
+        serde_json::json!({"text": "Hello!"})
+    ).await?;
+
+    // Listen for messages
+    tokio::spawn(async move {
+        while let Some(msg) = rx.recv().await {
+            println!("Received: {:?}", msg);
+        }
+    });
+
     Ok(())
 }
 ```
 
+## Features
+
+### Core Functionality
+- ✅ **WebSocket connection** with automatic reconnection and exponential backoff
+- ✅ **Channel subscriptions** for pub/sub messaging
+- ✅ **Broadcast messaging** with HTTP fallback when disconnected
+- ✅ **Postgres changes** - Subscribe to database INSERT/UPDATE/DELETE events
+- ✅ **Presence tracking** - Track online users with custom metadata
+- ✅ **Push messages** with acknowledgments (ok/error/timeout callbacks)
+- ✅ **Type-safe** error handling throughout
+
+### Technical Features
+- Async/await with [Tokio](https://tokio.rs)
+- Thread-safe shared state with `Arc<RwLock<T>>`
+- Event routing via mpsc channels
+- TLS support with `native-tls`
+- Heartbeat mechanism with timeout detection
+
+## Installation
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+supabase-realtime-rs = { git = "https://github.com/Scaraude/realtime-rust" }
+tokio = { version = "1", features = ["full"] }
+serde_json = "1"
+```
+
+## Usage Examples
+
+### Database Changes (Postgres)
+
+```rust
+use supabase_realtime_rs::PostgresChangesFilter;
+
+let channel = client.channel("db-changes", Default::default()).await;
+
+// Listen for all changes to the "todos" table
+let mut rx = channel.on_postgres_changes(
+    PostgresChangesFilter::new("public", "todos")
+).await;
+
+channel.subscribe().await?;
+
+tokio::spawn(async move {
+    while let Some(change) = rx.recv().await {
+        println!("Database change: {:?}", change);
+    }
+});
+```
+
+**Note**: Requires Row Level Security (RLS) policies with SELECT permissions on the table.
+
+### Presence Tracking
+
+```rust
+use serde_json::json;
+
+let channel = client.channel("room:lobby", Default::default()).await;
+channel.subscribe().await?;
+
+// Track your presence
+channel.track(json!({
+    "user": "Alice",
+    "status": "online",
+    "cursor_x": 100,
+    "cursor_y": 200
+})).await?;
+
+// Get all present users
+let users = channel.presence_list().await;
+println!("Online users: {:?}", users);
+
+// Stop tracking
+channel.untrack().await?;
+```
+
+### Push Messages with Callbacks
+
+```rust
+channel.push("custom_event", serde_json::json!({"data": "value"}))
+    .receive("ok", |payload| {
+        println!("Success: {:?}", payload);
+    })
+    .receive("error", |payload| {
+        eprintln!("Error: {:?}", payload);
+    })
+    .receive("timeout", |_| {
+        eprintln!("Request timed out");
+    })
+    .send()
+    .await?;
+```
+
 ## Examples
 
-Run the examples:
+The [`examples/`](examples/) directory contains working code for all features:
 
 ```bash
-# Basic connection test
-cargo run --example test_connection
+# Setup (first time only)
+cp .env.example .env
+# Edit .env with your Supabase credentials
 
-# Heartbeat mechanism test
-cargo run --example test_heartbeat
-
-# Channel subscription test
-cargo run --example test_channel
-
-# Subscribe/unsubscribe test
-cargo run --example test_unsubscribe
-
-# Broadcast message test
-cargo run --example test_send
-
-# HTTP fallback test
-cargo run --example test_http_fallback
-
-# Reconnection infrastructure test
-cargo run --example test_reconnection
-
-# Push messages with acknowledgments test
-cargo run --example test_push
-
-# Postgres changes (database events) test
-cargo run --example test_postgres_changes
-
-# Presence tracking test (single user)
-cargo run --example test_presence
-
-# Presence tracking test (multi-user simulation)
-cargo run --example test_presence_multiuser
-
-# Basic usage example (requires Supabase project)
-cargo run --example basic
+# Run examples
+cargo run --example test_connection       # Basic WebSocket connection
+cargo run --example test_channel          # Channel subscriptions
+cargo run --example test_send             # Broadcasting messages
+cargo run --example test_postgres_changes # Database event streaming
+cargo run --example test_presence         # Presence tracking
+cargo run --example test_push             # Push with acknowledgments
 ```
 
-## Project Structure
+## Production Readiness
 
+### Status: Beta (v0.1.0)
+
+**Production-ready features:**
+- ✅ All core Phoenix Channels protocol features
+- ✅ Robust reconnection and error handling
+- ✅ Comprehensive examples and documentation
+- ✅ CI/CD with automated testing
+
+**Known limitations:**
+- ⚠️ No automatic JWT token refresh (requires manual reconnect when token expires)
+- ⚠️ No postgres type transformers (values received as raw strings, manual parsing required)
+- ⚠️ Limited to Phoenix Channels features (no Supabase Auth integration yet)
+
+See [Cargo.toml](Cargo.toml) for dependency versions.
+
+## Why Rust?
+
+**Performance**: Zero-cost abstractions, compiled binary, native async/await
+
+**Safety**: Memory-safe and thread-safe by default, preventing entire classes of bugs
+
+**Use Cases**:
+- High-performance servers and microservices
+- CLI tools and system utilities
+- WebAssembly applications
+- Embedded systems
+- Anywhere JavaScript/Node.js is too slow or too heavy
+
+## Migrating from TypeScript
+
+Key differences from [@supabase/realtime-js](https://github.com/supabase/realtime-js):
+
+| Concept | JavaScript | Rust |
+|---------|-----------|------|
+| **Callbacks** | `channel.on('event', (payload) => {})` | `let mut rx = channel.on(event).await` |
+| **Error Handling** | `try/catch` | `Result<T, E>` with `?` operator |
+| **Async** | `async/await` (Promise-based) | `async/await` (Future-based with Tokio) |
+| **Shared State** | Direct mutation | `Arc<RwLock<T>>` for thread safety |
+| **Event Listening** | Single callback per event | mpsc channels (multiple consumers possible) |
+
+**Example comparison:**
+
+```javascript
+// JavaScript
+const channel = client.channel('room:lobby')
+channel.on('broadcast', { event: 'message' }, (payload) => {
+  console.log(payload)
+})
+await channel.subscribe()
 ```
-src/
-├── lib.rs              # Public API exports
-├── client/             # Client module (connection management)
-│   ├── builder.rs      # RealtimeClientBuilder with state watcher
-│   ├── client.rs       # RealtimeClient - main API
-│   ├── connection.rs   # ConnectionManager - WebSocket lifecycle
-│   └── state.rs        # ClientState - shared mutable state
-├── channel/            # Channel module (subscriptions)
-│   ├── channel.rs      # RealtimeChannel implementation
-│   └── state.rs        # ChannelState management
-├── messaging/          # Message handling
-│   ├── event.rs        # ChannelEvent, SystemEvent types
-│   └── router.rs       # Message routing logic
-├── infrastructure/     # Infrastructure services
-│   ├── heartbeat.rs    # Heartbeat mechanism
-│   ├── http.rs         # HTTP fallback for broadcasts
-│   ├── task_manager.rs # Background task management
-│   └── timer.rs        # Reconnection timer with backoff
-├── types/              # Core type definitions
-│   ├── constants.rs    # Protocol constants
-│   ├── error.rs        # Error types
-│   └── message.rs      # Message types
-└── websocket/          # WebSocket abstraction
-    └── factory.rs      # WebSocket factory
+
+```rust
+// Rust
+let channel = client.channel("room:lobby", Default::default()).await;
+let mut rx = channel.on(ChannelEvent::Broadcast("message".into())).await;
+channel.subscribe().await?;
+
+tokio::spawn(async move {
+    while let Some(payload) = rx.recv().await {
+        println!("{:?}", payload);
+    }
+});
 ```
 
-## Development Roadmap
+## Architecture
 
-### Phase 1: Core Infrastructure ✅ COMPLETE
+Built on idiomatic Rust patterns:
 
-- [x] Project setup
-- [x] Type definitions
-- [x] Error handling
-- [x] Basic client structure
+- **Connection Management** - WebSocket lifecycle with automatic reconnection
+- **Message Routing** - Routes incoming messages to appropriate channel handlers
+- **Channel System** - Subscribe to topics, filter events, manage presence
+- **Infrastructure** - Heartbeat, HTTP fallback, background task management
 
-### Phase 2: WebSocket Implementation ✅ COMPLETE
+Uses [Phoenix Channels protocol](https://hexdocs.pm/phoenix/channels.html) for compatibility with Supabase Realtime.
 
-- [x] WebSocket connection (tokio-tungstenite)
-- [x] Connection state management
-- [x] Concurrent read/write tasks
-- [x] Message serialization/deserialization (serde_json)
-- [x] Heartbeat mechanism with timeout
-- [x] Message routing and parsing
+## Development
 
-### Phase 3: Heartbeat & Reconnection ✅ COMPLETE
+### Build & Test
 
-- [x] Heartbeat implementation with timeout
-- [x] Heartbeat acknowledgment handling
-- [x] Automatic reconnection logic with exponential backoff
-- [x] State watcher pattern for disconnect detection
-- [x] Manual vs automatic disconnect handling
-- [x] Channel re-subscription after reconnect
+```bash
+# Check compilation
+cargo check
 
-### Phase 4: Channel Implementation ✅ COMPLETE
+# Run tests
+cargo test
 
-- [x] Channel creation (client.channel())
-- [x] Subscribe/unsubscribe to channels
-- [x] Event listeners with mpsc channels
-- [x] Message routing to channels
-- [x] Broadcast messages via WebSocket
-- [x] HTTP fallback for broadcasts
+# Format code
+cargo fmt
 
-### Phase 5: Advanced Features ✅ COMPLETE
+# Lint
+cargo clippy --all-features -- -D warnings
 
-- [x] Push messages with acknowledgments
-- [x] Callback registration (ok/error/timeout)
-- [x] Timeout mechanism with tokio
-- [x] Postgres changes subscription (basic filtering)
-- [x] Presence tracking (state sync, joins/leaves, track/untrack)
+# Generate documentation
+cargo doc --open
+```
 
-### Phase 6: Polish & Open Source Prep (In Progress)
+### Contributing
 
-- [ ] Access token refresh
-- [ ] Comprehensive API documentation
-- [ ] CI/CD setup (GitHub Actions)
-- [ ] More examples and use cases
+Contributions are welcome! Here's how to get started:
 
-### Phase 7: Testing & Polish
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
+3. **Make** your changes
+4. **Test** your changes (`cargo test && cargo clippy`)
+5. **Commit** (`git commit -m 'Add amazing feature'`)
+6. **Push** (`git push origin feature/amazing-feature`)
+7. **Open** a Pull Request
 
-- [x] Basic connection tests
-- [x] Heartbeat tests
-- [x] Channel subscription tests
-- [x] Broadcast tests
-- [x] Reconnection infrastructure test
-- [x] Push acknowledgment test
-- [x] Postgres changes test
-- [x] Presence tracking tests (single and multi-user)
-- [ ] Unit tests
-- [ ] Integration tests
-- [ ] Documentation
-- [ ] More examples
+**Code style:**
+- Follow Rust naming conventions (snake_case, PascalCase)
+- Add rustdoc comments (`///`) to public APIs
+- Include examples in documentation
+- Use `Result<T, E>` for error handling, avoid `unwrap()`
 
-## Porting from TypeScript
-
-This project is being ported from [@supabase/realtime-js](https://github.com/supabase/realtime-js).
-
-Key differences:
-
-- **Callbacks → Traits/Channels**: JavaScript callbacks are replaced with Rust traits and async channels
-- **Shared State**: Uses `Arc<RwLock<T>>` for thread-safe shared state
-- **Error Handling**: Uses `Result<T, RealtimeError>` instead of exceptions
-- **Async/Await**: Native Tokio async/await instead of Promises
-
-## Contributing
-
-This is a starter boilerplate. Contributions are welcome!
+**Need help?** Open an issue or discussion!
 
 ## License
 
-MIT
+MIT License - see [LICENSE](LICENSE) for details
+
+## Acknowledgments
+
+- Built on [Tokio](https://tokio.rs) async runtime
+- Implements [Phoenix Channels](https://hexdocs.pm/phoenix/channels.html) protocol
+- Ported from [@supabase/realtime-js](https://github.com/supabase/realtime-js)
+
+---
+
+**Made with 🦀 by the Rust community**

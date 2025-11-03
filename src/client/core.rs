@@ -11,6 +11,32 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use url::Url;
 
+/// The main entry point for interacting with Supabase Realtime.
+///
+/// `RealtimeClient` manages the WebSocket connection to Supabase Realtime servers,
+/// handles automatic reconnection with exponential backoff, and provides channel
+/// creation for real-time subscriptions.
+///
+/// # Example
+///
+/// ```no_run
+/// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// let client = RealtimeClient::new(
+///     "wss://your-project.supabase.co/realtime/v1",
+///     RealtimeClientOptions {
+///         api_key: "your-anon-key".to_string(),
+///         ..Default::default()
+///     }
+/// )?;
+///
+/// client.connect().await?;
+/// // Use the client...
+/// client.disconnect().await?;
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Clone)]
 pub struct RealtimeClient {
     pub(crate) endpoint: String,
@@ -24,9 +50,26 @@ pub struct RealtimeClient {
 }
 
 impl RealtimeClient {
-    /// Create a new RealtimeClient
+    /// Creates a new RealtimeClient instance.
+    ///
+    /// This initializes the client but does not establish a connection. You must call
+    /// [`connect()`](Self::connect) to establish the WebSocket connection.
+    ///
+    /// # Arguments
+    ///
+    /// * `endpoint` - The WebSocket endpoint URL (e.g., `wss://your-project.supabase.co/realtime/v1`)
+    /// * `options` - Configuration options including API key and optional settings
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(RealtimeClient)` if the endpoint is valid, or an error if the URL is malformed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RealtimeError::UrlParse`](crate::types::RealtimeError::UrlParse) if the endpoint URL cannot be parsed.
     ///
     /// # Example
+    ///
     /// ```no_run
     /// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
     ///
@@ -105,7 +148,45 @@ impl RealtimeClient {
         }
         Ok(())
     }
-    /// Connect to the WebSocket server
+    /// Establishes a WebSocket connection to the Supabase Realtime server.
+    ///
+    /// This method opens the WebSocket connection, starts the heartbeat mechanism,
+    /// and spawns background tasks for reading messages and maintaining the connection.
+    /// If already connected, this method returns immediately without error.
+    ///
+    /// After connecting successfully, the client will automatically:
+    /// - Send periodic heartbeat messages
+    /// - Attempt reconnection if the connection drops (unless manually disconnected)
+    /// - Route incoming messages to subscribed channels
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The WebSocket handshake fails
+    /// - The endpoint URL is invalid
+    /// - TLS/SSL negotiation fails
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = RealtimeClient::new(
+    ///     "wss://your-project.supabase.co/realtime/v1",
+    ///     RealtimeClientOptions {
+    ///         api_key: "your-anon-key".to_string(),
+    ///         ..Default::default()
+    ///     }
+    /// )?;
+    ///
+    /// // Establish connection
+    /// client.connect().await?;
+    ///
+    /// // Now you can create channels and subscribe
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn connect(&self) -> Result<()> {
         {
             let state = self.connection.state().await;
@@ -223,6 +304,45 @@ impl RealtimeClient {
         Ok(())
     }
 
+    /// Creates or retrieves a channel for real-time subscriptions.
+    ///
+    /// Channels are the primary way to subscribe to real-time events. Each channel is identified
+    /// by a unique topic string. If a channel with the given topic already exists, this method
+    /// returns the existing channel instead of creating a new one.
+    ///
+    /// # Arguments
+    ///
+    /// * `topic` - The channel topic (e.g., "room:lobby", "public:todos"). The "realtime:" prefix
+    ///   is automatically added.
+    /// * `options` - Configuration options for the channel (broadcast settings, presence key, etc.)
+    ///
+    /// # Returns
+    ///
+    /// Returns an `Arc<RealtimeChannel>` that can be used to subscribe to events, send broadcasts,
+    /// and track presence.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions, RealtimeChannelOptions};
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = RealtimeClient::new(
+    /// #     "wss://your-project.supabase.co/realtime/v1",
+    /// #     RealtimeClientOptions {
+    /// #         api_key: "your-anon-key".to_string(),
+    /// #         ..Default::default()
+    /// #     }
+    /// # )?;
+    /// # client.connect().await?;
+    /// // Create a channel
+    /// let channel = client.channel("room:lobby", Default::default()).await;
+    ///
+    /// // Subscribe to receive events
+    /// channel.subscribe().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn channel(
         &self,
         topic: &str,
@@ -252,7 +372,37 @@ impl RealtimeClient {
         new_channel
     }
 
-    /// Disconnect from the WebSocket server
+    /// Gracefully disconnects from the WebSocket server.
+    ///
+    /// This method closes the WebSocket connection, aborts all background tasks (heartbeat,
+    /// message reading), and marks the disconnect as manual. When disconnected manually, the
+    /// client will NOT attempt automatic reconnection.
+    ///
+    /// To reconnect after a manual disconnect, call [`connect()`](Self::connect) again.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the WebSocket close handshake fails (rare).
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = RealtimeClient::new(
+    /// #     "wss://your-project.supabase.co/realtime/v1",
+    /// #     RealtimeClientOptions {
+    /// #         api_key: "your-anon-key".to_string(),
+    /// #         ..Default::default()
+    /// #     }
+    /// # )?;
+    /// # client.connect().await?;
+    /// // When done, disconnect gracefully
+    /// client.disconnect().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn disconnect(&self) -> Result<()> {
         {
             let state = self.connection.state().await;
@@ -278,7 +428,31 @@ impl RealtimeClient {
         Ok(())
     }
 
-    /// Check if connected
+    /// Checks whether the client is currently connected to the server.
+    ///
+    /// # Returns
+    ///
+    /// Returns `true` if the WebSocket connection is open, `false` otherwise.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = RealtimeClient::new(
+    /// #     "wss://your-project.supabase.co/realtime/v1",
+    /// #     RealtimeClientOptions {
+    /// #         api_key: "your-anon-key".to_string(),
+    /// #         ..Default::default()
+    /// #     }
+    /// # )?;
+    /// if !client.is_connected().await {
+    ///     client.connect().await?;
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn is_connected(&self) -> bool {
         self.connection.is_connected().await
     }

@@ -14,14 +14,55 @@ use crate::{client::RealtimeClient, types::DEFAULT_TIMEOUT};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{RwLock, mpsc};
 
+/// Configuration options for a realtime channel.
+///
+/// These options control broadcasting behavior, presence tracking, and access control.
 #[derive(Debug, Clone, Default)]
 pub struct RealtimeChannelOptions {
+    /// Whether to receive your own broadcast messages. Default: `false`.
     pub broadcast_self: bool,
+    /// Whether to receive acknowledgments for broadcast messages. Default: `false`.
     pub broadcast_ack: bool,
+    /// Unique key for presence tracking. If `Some`, enables presence tracking.
     pub presence_key: Option<String>,
+    /// Whether this is a private channel requiring authorization. Default: `false`.
     pub is_private: bool,
 }
 
+/// A channel for subscribing to real-time events from Supabase.
+///
+/// Channels enable you to:
+/// - **Subscribe to database changes** (INSERT, UPDATE, DELETE events from Postgres)
+/// - **Send and receive broadcasts** (pub/sub messaging between clients)
+/// - **Track presence** (who's online, cursor positions, user status)
+///
+/// Each channel is identified by a topic string. Multiple clients can subscribe to the same
+/// topic to receive shared events.
+///
+/// # Example
+///
+/// ```no_run
+/// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
+///
+/// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+/// # let client = RealtimeClient::new(
+/// #     "wss://your-project.supabase.co/realtime/v1",
+/// #     RealtimeClientOptions {
+/// #         api_key: "your-anon-key".to_string(),
+/// #         ..Default::default()
+/// #     }
+/// # )?;
+/// # client.connect().await?;
+/// // Create a channel
+/// let channel = client.channel("room:lobby", Default::default()).await;
+///
+/// // Subscribe to the channel
+/// channel.subscribe().await?;
+///
+/// // Now you can listen to events, send broadcasts, track presence, etc.
+/// # Ok(())
+/// # }
+/// ```
 pub struct RealtimeChannel {
     topic: String,
     client: Arc<RealtimeClient>,
@@ -47,7 +88,49 @@ impl RealtimeChannel {
         self.state.read().await.status == ChannelStatus::Joined
     }
 
-    /// Register an event listener for a specific event type
+    /// Registers an event listener for a specific event type.
+    ///
+    /// This method returns a channel receiver that will receive payloads whenever the specified
+    /// event occurs. You can spawn a task to process events asynchronously.
+    ///
+    /// # Arguments
+    ///
+    /// * `event` - The event type to listen for (e.g., `ChannelEvent::Broadcast("message")`)
+    ///
+    /// # Returns
+    ///
+    /// Returns an `mpsc::Receiver<serde_json::Value>` that receives event payloads.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions, ChannelEvent};
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = RealtimeClient::new(
+    /// #     "wss://your-project.supabase.co/realtime/v1",
+    /// #     RealtimeClientOptions {
+    /// #         api_key: "your-anon-key".to_string(),
+    /// #         ..Default::default()
+    /// #     }
+    /// # )?;
+    /// # client.connect().await?;
+    /// let channel = client.channel("room:lobby", Default::default()).await;
+    ///
+    /// // Listen for broadcast messages
+    /// let mut rx = channel.on(ChannelEvent::Broadcast("message".into())).await;
+    ///
+    /// channel.subscribe().await?;
+    ///
+    /// // Spawn a task to process events
+    /// tokio::spawn(async move {
+    ///     while let Some(payload) = rx.recv().await {
+    ///         println!("Received message: {:?}", payload);
+    ///     }
+    /// });
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn on(&self, event: impl Into<ChannelEvent>) -> mpsc::Receiver<serde_json::Value> {
         let (tx, rx) = mpsc::channel(100);
         let binding = EventBinding {
@@ -61,6 +144,53 @@ impl RealtimeChannel {
         rx
     }
 
+    /// Subscribes to Postgres database changes for a specific table.
+    ///
+    /// This method listens for INSERT, UPDATE, and DELETE events from your Postgres database,
+    /// delivered in real-time via Supabase Realtime.
+    ///
+    /// **Note**: You must have Row Level Security (RLS) policies configured with SELECT permissions
+    /// on the table for the events to be delivered. See Supabase documentation for details.
+    ///
+    /// # Arguments
+    ///
+    /// * `filter` - The postgres changes filter specifying schema, table, and event type
+    ///
+    /// # Returns
+    ///
+    /// Returns an `mpsc::Receiver<serde_json::Value>` that receives change payloads.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions, PostgresChangesFilter};
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = RealtimeClient::new(
+    /// #     "wss://your-project.supabase.co/realtime/v1",
+    /// #     RealtimeClientOptions {
+    /// #         api_key: "your-anon-key".to_string(),
+    /// #         ..Default::default()
+    /// #     }
+    /// # )?;
+    /// # client.connect().await?;
+    /// let channel = client.channel("schema-db-changes", Default::default()).await;
+    ///
+    /// // Listen for all changes to the "todos" table
+    /// let mut rx = channel.on_postgres_changes(
+    ///     PostgresChangesFilter::new("public", "todos")
+    /// ).await;
+    ///
+    /// channel.subscribe().await?;
+    ///
+    /// tokio::spawn(async move {
+    ///     while let Some(change) = rx.recv().await {
+    ///         println!("Database change: {:?}", change);
+    ///     }
+    /// });
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn on_postgres_changes(
         &self,
         filter: PostgresChangesFilter,
@@ -155,7 +285,45 @@ impl RealtimeChannel {
         }
     }
 
-    /// Subscribe to the channel
+    /// Subscribes to the channel to start receiving events.
+    ///
+    /// You must call `subscribe()` after registering event listeners with [`on()`](Self::on)
+    /// or [`on_postgres_changes()`](Self::on_postgres_changes). Only after subscribing will
+    /// events be delivered to your listeners.
+    ///
+    /// If the channel is already subscribed or subscribing, this method returns immediately
+    /// without error.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The client is not connected
+    /// - The subscription message cannot be sent
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions, ChannelEvent};
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = RealtimeClient::new(
+    /// #     "wss://your-project.supabase.co/realtime/v1",
+    /// #     RealtimeClientOptions {
+    /// #         api_key: "your-anon-key".to_string(),
+    /// #         ..Default::default()
+    /// #     }
+    /// # )?;
+    /// # client.connect().await?;
+    /// let channel = client.channel("room:lobby", Default::default()).await;
+    ///
+    /// // Register listeners BEFORE subscribing
+    /// let mut rx = channel.on(ChannelEvent::Broadcast("message".into())).await;
+    ///
+    /// // Now subscribe to start receiving events
+    /// channel.subscribe().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn subscribe(&self) -> Result<()> {
         let mut state = self.state.write().await;
 
@@ -244,7 +412,37 @@ impl RealtimeChannel {
             .await
     }
 
-    /// Unsubscribe from the channel
+    /// Unsubscribes from the channel and stops receiving events.
+    ///
+    /// After unsubscribing, event listeners will no longer receive payloads. You can
+    /// resubscribe later by calling [`subscribe()`](Self::subscribe) again.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the unsubscribe message cannot be sent.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = RealtimeClient::new(
+    /// #     "wss://your-project.supabase.co/realtime/v1",
+    /// #     RealtimeClientOptions {
+    /// #         api_key: "your-anon-key".to_string(),
+    /// #         ..Default::default()
+    /// #     }
+    /// # )?;
+    /// # client.connect().await?;
+    /// let channel = client.channel("room:lobby", Default::default()).await;
+    /// channel.subscribe().await?;
+    ///
+    /// // Later, unsubscribe when done
+    /// channel.unsubscribe().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn unsubscribe(&self) -> Result<()> {
         let mut state = self.state.write().await;
 
@@ -270,6 +468,49 @@ impl RealtimeChannel {
         Ok(())
     }
 
+    /// Sends a broadcast message to all subscribers of this channel.
+    ///
+    /// Broadcasts are pub/sub messages sent between clients. This is useful for real-time
+    /// collaboration features like chat, cursor tracking, or notifications.
+    ///
+    /// If connected, the message is sent via WebSocket. If disconnected, it automatically
+    /// falls back to HTTP POST to ensure delivery.
+    ///
+    /// # Arguments
+    ///
+    /// * `event` - The broadcast event type (e.g., `ChannelEvent::Broadcast("message")`)
+    /// * `payload` - The message payload as JSON
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if both WebSocket and HTTP delivery fail.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions, ChannelEvent};
+    /// use serde_json::json;
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = RealtimeClient::new(
+    /// #     "wss://your-project.supabase.co/realtime/v1",
+    /// #     RealtimeClientOptions {
+    /// #         api_key: "your-anon-key".to_string(),
+    /// #         ..Default::default()
+    /// #     }
+    /// # )?;
+    /// # client.connect().await?;
+    /// let channel = client.channel("room:lobby", Default::default()).await;
+    /// channel.subscribe().await?;
+    ///
+    /// // Send a broadcast message
+    /// channel.send(
+    ///     ChannelEvent::Broadcast("message".into()),
+    ///     json!({"text": "Hello, world!", "user": "Alice"})
+    /// ).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn send(&self, event: ChannelEvent, payload: serde_json::Value) -> Result<()> {
         let is_joined = {
             let state = self.state.read().await;
@@ -328,6 +569,56 @@ impl RealtimeChannel {
             .collect()
     }
 
+    /// Tracks your presence on this channel, broadcasting metadata to other subscribers.
+    ///
+    /// When you track presence, all other subscribers will receive a `presence_diff` event
+    /// with your metadata. You can update your presence by calling `track()` again with
+    /// new metadata - this replaces the previous state for your connection.
+    ///
+    /// Common use cases:
+    /// - Online/offline status
+    /// - Cursor positions in collaborative editing
+    /// - "User is typing..." indicators
+    /// - Active users list
+    ///
+    /// # Arguments
+    ///
+    /// * `metadata` - Arbitrary JSON metadata to broadcast (status, username, cursor position, etc.)
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The channel is not subscribed
+    /// - The message cannot be sent
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
+    /// use serde_json::json;
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = RealtimeClient::new(
+    /// #     "wss://your-project.supabase.co/realtime/v1",
+    /// #     RealtimeClientOptions {
+    /// #         api_key: "your-anon-key".to_string(),
+    /// #         ..Default::default()
+    /// #     }
+    /// # )?;
+    /// # client.connect().await?;
+    /// let channel = client.channel("room:lobby", Default::default()).await;
+    /// channel.subscribe().await?;
+    ///
+    /// // Track your presence
+    /// channel.track(json!({
+    ///     "user": "Alice",
+    ///     "status": "online",
+    ///     "cursor_x": 100,
+    ///     "cursor_y": 200
+    /// })).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn track(self: &Arc<Self>, metadata: serde_json::Value) -> Result<()> {
         let payload = serde_json::json!({
             "type": "presence",
@@ -338,6 +629,42 @@ impl RealtimeChannel {
         self.push("presence", payload).send().await
     }
 
+    /// Stops tracking your presence on this channel.
+    ///
+    /// When you untrack, all other subscribers will receive a `presence_diff` event indicating
+    /// you have left. This is useful for graceful cleanup when a user disconnects or leaves
+    /// a collaborative session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The channel is not subscribed
+    /// - The message cannot be sent
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
+    /// use serde_json::json;
+    ///
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// # let client = RealtimeClient::new(
+    /// #     "wss://your-project.supabase.co/realtime/v1",
+    /// #     RealtimeClientOptions {
+    /// #         api_key: "your-anon-key".to_string(),
+    /// #         ..Default::default()
+    /// #     }
+    /// # )?;
+    /// # client.connect().await?;
+    /// let channel = client.channel("room:lobby", Default::default()).await;
+    /// channel.subscribe().await?;
+    /// channel.track(json!({"user": "Alice", "status": "online"})).await?;
+    ///
+    /// // Later, stop tracking presence
+    /// channel.untrack().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn untrack(self: &Arc<Self>) -> Result<()> {
         let payload = serde_json::json!({
             "type": "presence",
