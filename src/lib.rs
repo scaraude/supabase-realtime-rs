@@ -15,7 +15,7 @@
 //!             api_key: "your-anon-key".to_string(),
 //!             ..Default::default()
 //!         }
-//!     )?;
+//!     )?.build();
 //!
 //!     client.connect().await?;
 //!     Ok(())

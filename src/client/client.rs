@@ -27,8 +27,19 @@ impl RealtimeClient {
     /// Create a new RealtimeClient using the builder pattern
     ///
     /// # Example
-    /// ```
-    /// let client = RealtimeClient::new(endpoint, options)?.build();
+    /// ```no_run
+    /// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions};
+    ///
+    /// # fn main() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = RealtimeClient::new(
+    ///     "wss://your-project.supabase.co/realtime/v1",
+    ///     RealtimeClientOptions {
+    ///         api_key: "your-anon-key".to_string(),
+    ///         ..Default::default()
+    ///     }
+    /// )?.build();
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn new(
         endpoint: impl Into<String>,
