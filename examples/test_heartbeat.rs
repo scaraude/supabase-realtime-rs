@@ -23,8 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             api_key,
             ..Default::default()
         },
-    )?
-    .build();
+    )?;
 
     println!("✅ Test 1: Connecting with heartbeat enabled...");
     client.connect().await?;

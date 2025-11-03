@@ -27,8 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             api_key,
             ..Default::default()
         },
-    )?
-    .build();
+    )?;
 
     // Test 1: Connect
     println!("✅ Test 1: Connecting...");

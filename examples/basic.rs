@@ -21,8 +21,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             api_key,
             ..Default::default()
         },
-    )?
-    .build();
+    )?;
 
     // Connect
     println!("Connecting to Supabase Realtime...");

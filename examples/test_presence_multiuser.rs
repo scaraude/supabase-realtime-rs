@@ -43,8 +43,7 @@ impl User {
                 api_key,
                 ..Default::default()
             },
-        )?
-        .build();
+        )?;
 
         client.connect().await?;
 

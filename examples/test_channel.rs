@@ -28,8 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             heartbeat_interval: Some(30_000), // 30 seconds
             ..Default::default()
         },
-    )?
-    .build();
+    )?;
 
     println!("✅ Test 1: Creating a channel...");
     let channel = client
