@@ -135,12 +135,13 @@ impl Presence {
 
         PresenceChanges { joins, leaves }
     }
+
     pub fn sync_diff(&mut self, diff: RawPresenceDiff) -> PresenceChanges {
         let joins: PresenceState = Self::transform_state(diff.joins.clone());
         let leaves: PresenceState = Self::transform_state(diff.leaves.clone());
 
         joins.iter().for_each(|(key, metas)| {
-            let current_meta = self.state.entry(key.clone()).or_insert_with(Vec::new);
+            let current_meta = self.state.entry(key.clone()).or_default();
 
             let new_refs: Vec<&str> = metas
                 .iter()

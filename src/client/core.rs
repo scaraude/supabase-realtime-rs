@@ -24,7 +24,7 @@ pub struct RealtimeClient {
 }
 
 impl RealtimeClient {
-    /// Create a new RealtimeClient using the builder pattern
+    /// Create a new RealtimeClient
     ///
     /// # Example
     /// ```no_run
@@ -37,20 +37,17 @@ impl RealtimeClient {
     ///         api_key: "your-anon-key".to_string(),
     ///         ..Default::default()
     ///     }
-    /// )?.build();
+    /// )?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(
-        endpoint: impl Into<String>,
-        options: RealtimeClientOptions,
-    ) -> Result<RealtimeClientBuilder> {
-        RealtimeClientBuilder::new(endpoint, options)
+    pub fn new(endpoint: impl Into<String>, options: RealtimeClientOptions) -> Result<Self> {
+        RealtimeClientBuilder::new(endpoint, options).map(|builder| builder.build())
     }
 
     /// Set connection state and notify watchers
     async fn set_state(&self, new_state: ConnectionState) {
-        self.connection.set_state(new_state.clone()).await;
+        self.connection.set_state(new_state).await;
 
         let state = self.state.read().await;
         state.notify_state_change(new_state, state.was_manual_disconnect);

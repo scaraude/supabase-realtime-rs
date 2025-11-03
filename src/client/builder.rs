@@ -3,23 +3,12 @@ use crate::types::{RealtimeError, Result};
 use std::sync::Arc;
 use tokio::sync::{RwLock, watch};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct RealtimeClientOptions {
     pub api_key: String,
     pub timeout: Option<u64>,
     pub heartbeat_interval: Option<u64>,
     pub access_token: Option<String>,
-}
-
-impl Default for RealtimeClientOptions {
-    fn default() -> Self {
-        Self {
-            api_key: String::new(),
-            timeout: None,
-            heartbeat_interval: None,
-            access_token: None,
-        }
-    }
 }
 
 /// Builder for RealtimeClient that handles initialization

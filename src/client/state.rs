@@ -46,13 +46,13 @@ impl ClientState {
 
     /// Notify state change watchers
     pub fn notify_state_change(&self, state: ConnectionState, manual: bool) {
-        if let Some(tx) = &self.state_change_tx {
-            if let Err(_) = tx.send((state, manual)) {
-                tracing::debug!(
-                    "State change watcher disconnected, could not notify state: {:?}",
-                    state
-                );
-            }
+        if let Some(tx) = &self.state_change_tx
+            && tx.send((state, manual)).is_err()
+        {
+            tracing::debug!(
+                "State change watcher disconnected, could not notify state: {:?}",
+                state
+            );
         }
     }
 }

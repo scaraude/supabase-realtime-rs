@@ -25,10 +25,10 @@ impl MessageRouter {
         }
 
         // Handle push replies
-        if message.event == ChannelEvent::System(SystemEvent::Reply) {
-            if self.handle_push_reply(&message).await {
-                return; // Reply was handled, don't route to channels
-            }
+        if message.event == ChannelEvent::System(SystemEvent::Reply)
+            && self.handle_push_reply(&message).await
+        {
+            return; // Reply was handled, don't route to channels
         }
 
         if message.event == ChannelEvent::PresenceDiff
@@ -80,8 +80,8 @@ impl MessageRouter {
 
         match message.event {
             ChannelEvent::PresenceState => {
-                if let Some(server_presence_state) =
-                    serde_json::from_value::<RawPresenceState>(message.payload.clone()).ok()
+                if let Ok(server_presence_state) =
+                    serde_json::from_value::<RawPresenceState>(message.payload.clone())
                 {
                     // Get join_ref from channel state (stored during subscribe)
                     let Some(join_ref) = channel_state.join_ref.clone() else {
@@ -113,8 +113,8 @@ impl MessageRouter {
                 }
             }
             ChannelEvent::PresenceDiff => {
-                if let Some(server_presence_diff) =
-                    serde_json::from_value::<RawPresenceDiff>(message.payload.clone()).ok()
+                if let Ok(server_presence_diff) =
+                    serde_json::from_value::<RawPresenceDiff>(message.payload.clone())
                 {
                     let has_pending_sync = channel_state
                         .presence

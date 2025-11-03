@@ -43,3 +43,9 @@ impl ChannelState {
         }
     }
 }
+
+impl Default for ChannelState {
+    fn default() -> Self {
+        Self::new()
+    }
+}

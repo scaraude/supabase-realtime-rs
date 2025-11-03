@@ -15,8 +15,11 @@ pub enum ConnectionState {
     Closing,
 }
 
+/// Type alias for WebSocket writer to reduce complexity
+type WebSocketWriter = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
+
 pub struct ConnectionManager {
-    ws_write: Arc<RwLock<Option<SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>>>>,
+    ws_write: Arc<RwLock<Option<WebSocketWriter>>>,
     state: Arc<RwLock<ConnectionState>>,
 }
 
@@ -29,17 +32,14 @@ impl ConnectionManager {
     }
 
     /// Sets the WebSocket write sink (called after successful connection)
-    pub async fn set_writer(
-        &self,
-        writer: SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>,
-    ) {
+    pub async fn set_writer(&self, writer: WebSocketWriter) {
         let mut ws = self.ws_write.write().await;
         *ws = Some(writer);
     }
 
     /// Gets the current connection state
     pub async fn state(&self) -> ConnectionState {
-        self.state.read().await.clone()
+        *self.state.read().await
     }
 
     /// Sets the connection state

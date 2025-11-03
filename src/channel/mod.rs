@@ -1,13 +1,13 @@
 // Module declarations
-mod channel;
 mod config;
+mod core;
 mod postgres_changes;
 mod presence;
 pub mod push;
 mod state;
 
 // Public API exports
-pub use channel::{RealtimeChannel, RealtimeChannelOptions};
+pub use core::{RealtimeChannel, RealtimeChannelOptions};
 pub use postgres_changes::{PostgresChangeEvent, PostgresChangesFilter, PostgresChangesPayload};
 pub use presence::{
     Presence, PresenceChanges, PresenceMeta, PresenceState, RawPresenceDiff, RawPresenceState,

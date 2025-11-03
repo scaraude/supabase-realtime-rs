@@ -40,20 +40,20 @@ impl<'de> Deserialize<'de> for ChannelEvent {
         D: serde::Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        Ok(Self::from_str(&s))
+        Ok(Self::parse(&s))
     }
 }
 
 impl ChannelEvent {
     /// Parse a string into a ChannelEvent
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s {
             channel_events::POSTGRES_CHANGES => Self::PostgresChanges,
             channel_events::BROADCAST => Self::Broadcast,
             channel_events::PRESENCE_STATE => Self::PresenceState,
             channel_events::PRESENCE_DIFF => Self::PresenceDiff,
             _ if s.starts_with("phx_") || s == phoenix_events::HEARTBEAT => {
-                Self::System(SystemEvent::from_str(s))
+                Self::System(SystemEvent::parse(s))
             }
             _ => Self::Custom(s.to_string()),
         }
@@ -74,13 +74,13 @@ impl ChannelEvent {
 
 impl From<&str> for ChannelEvent {
     fn from(s: &str) -> Self {
-        Self::from_str(s)
+        Self::parse(s)
     }
 }
 
 impl From<String> for ChannelEvent {
     fn from(s: String) -> Self {
-        Self::from_str(&s)
+        Self::parse(&s)
     }
 }
 
@@ -120,7 +120,7 @@ pub enum SystemEvent {
 }
 
 impl SystemEvent {
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s {
             phoenix_events::JOIN => Self::Join,
             phoenix_events::LEAVE => Self::Leave,
@@ -189,24 +189,24 @@ mod tests {
     #[test]
     fn test_channel_event_from_str() {
         assert_eq!(
-            ChannelEvent::from_str("postgres_changes"),
+            ChannelEvent::parse("postgres_changes"),
             ChannelEvent::PostgresChanges
         );
-        assert_eq!(ChannelEvent::from_str("broadcast"), ChannelEvent::Broadcast);
+        assert_eq!(ChannelEvent::parse("broadcast"), ChannelEvent::Broadcast);
         assert_eq!(
-            ChannelEvent::from_str("presence_state"),
+            ChannelEvent::parse("presence_state"),
             ChannelEvent::PresenceState
         );
         assert_eq!(
-            ChannelEvent::from_str("presence_diff"),
+            ChannelEvent::parse("presence_diff"),
             ChannelEvent::PresenceDiff
         );
         assert_eq!(
-            ChannelEvent::from_str("phx_join"),
+            ChannelEvent::parse("phx_join"),
             ChannelEvent::System(SystemEvent::Join)
         );
         assert_eq!(
-            ChannelEvent::from_str("my_custom_event"),
+            ChannelEvent::parse("my_custom_event"),
             ChannelEvent::Custom("my_custom_event".to_string())
         );
     }
@@ -224,7 +224,7 @@ mod tests {
 
         for event in events {
             let s = event.as_str();
-            assert_eq!(SystemEvent::from_str(s), event);
+            assert_eq!(SystemEvent::parse(s), event);
         }
     }
 }

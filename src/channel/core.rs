@@ -120,27 +120,27 @@ impl RealtimeChannel {
 
     /// Internal method to trigger events to registered listeners
     pub(crate) async fn _trigger(&self, event: ChannelEvent, payload: serde_json::Value) {
-        let event_enum = ChannelEvent::from_str(event.as_str());
+        let event_enum = ChannelEvent::parse(event.as_str());
         let state = self.state.read().await;
 
         for binding in state.bindings.iter() {
             if binding.event == event_enum {
-                if event_enum == ChannelEvent::PostgresChanges {
-                    if let Some(filters) = &binding.filter {
-                        // Deserialize payload to typed struct for filtering
-                        match serde_json::from_value::<PostgresChangesPayload>(payload.clone()) {
-                            Ok(typed_payload) => {
-                                if !self.matches_postgres_filter(filters, &typed_payload) {
-                                    continue;
-                                }
-                            }
-                            Err(e) => {
-                                tracing::warn!(
-                                    "Failed to deserialize postgres_changes payload: {}. Skipping filter.",
-                                    e
-                                );
+                if event_enum == ChannelEvent::PostgresChanges
+                    && let Some(filters) = &binding.filter
+                {
+                    // Deserialize payload to typed struct for filtering
+                    match serde_json::from_value::<PostgresChangesPayload>(payload.clone()) {
+                        Ok(typed_payload) => {
+                            if !self.matches_postgres_filter(filters, &typed_payload) {
                                 continue;
                             }
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                "Failed to deserialize postgres_changes payload: {}. Skipping filter.",
+                                e
+                            );
+                            continue;
                         }
                     }
                 }
