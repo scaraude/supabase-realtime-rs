@@ -13,7 +13,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🦀 Testing Push\n");
 
     // Get credentials from environment, fallback to echo server for testing
-    let url = std::env::var("SUPABASE_URL").unwrap_or_else(|_| "wss://echo.websocket.org".to_string());
+    let url =
+        std::env::var("SUPABASE_URL").unwrap_or_else(|_| "wss://echo.websocket.org".to_string());
     let api_key = std::env::var("SUPABASE_API_KEY").unwrap_or_else(|_| "test".to_string());
 
     println!("📡 Connecting to: {}\n", url);

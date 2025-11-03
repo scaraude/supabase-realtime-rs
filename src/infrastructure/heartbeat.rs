@@ -56,9 +56,14 @@ impl HeartbeatManager {
                 {
                     let state = self.state.read().await;
                     if state.pending_heartbeat_ref.is_some() {
-                        tracing::error!("Heartbeat timeout detected - server did not respond to heartbeat");
+                        tracing::error!(
+                            "Heartbeat timeout detected - server did not respond to heartbeat"
+                        );
                         if let Err(e) = connection.close().await {
-                            tracing::error!("Failed to close connection after heartbeat timeout: {}", e);
+                            tracing::error!(
+                                "Failed to close connection after heartbeat timeout: {}",
+                                e
+                            );
                         }
                         continue;
                     }

@@ -1,11 +1,11 @@
 use crate::types::{error::Result, message::RealtimeMessage};
-use futures::stream::SplitSink;
 use futures::SinkExt;
+use futures::stream::SplitSink;
 use serde_json;
 use std::sync::Arc;
 use tokio::net::TcpStream;
 use tokio::sync::RwLock;
-use tokio_tungstenite::{tungstenite::Message, MaybeTlsStream, WebSocketStream};
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream, tungstenite::Message};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ConnectionState {

@@ -1,7 +1,7 @@
-use super::{RealtimeClient, ClientState, ConnectionManager, ConnectionState};
+use super::{ClientState, ConnectionManager, ConnectionState, RealtimeClient};
 use crate::types::{RealtimeError, Result};
 use std::sync::Arc;
-use tokio::sync::{watch, RwLock};
+use tokio::sync::{RwLock, watch};
 
 #[derive(Debug, Clone)]
 pub struct RealtimeClientOptions {

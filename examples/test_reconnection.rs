@@ -15,10 +15,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("🦀 Testing Reconnection with Real Supabase\n");
 
     // Get credentials from environment
-    let url = std::env::var("SUPABASE_URL")
-        .expect("SUPABASE_URL must be set in .env");
-    let api_key = std::env::var("SUPABASE_API_KEY")
-        .expect("SUPABASE_API_KEY must be set in .env");
+    let url = std::env::var("SUPABASE_URL").expect("SUPABASE_URL must be set in .env");
+    let api_key = std::env::var("SUPABASE_API_KEY").expect("SUPABASE_API_KEY must be set in .env");
 
     println!("📡 Connecting to: {}\n", url);
 
@@ -82,9 +80,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     for i in 1..=30 {
         tokio::time::sleep(Duration::from_secs(1)).await;
         let is_connected = client.is_connected().await;
-        print!("\r⏱  Second {}/30 - Status: {}",
+        print!(
+            "\r⏱  Second {}/30 - Status: {}",
             i,
-            if is_connected { "🟢 Connected" } else { "🔴 Disconnected" }
+            if is_connected {
+                "🟢 Connected"
+            } else {
+                "🔴 Disconnected"
+            }
         );
         std::io::Write::flush(&mut std::io::stdout())?;
     }
