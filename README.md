@@ -1,3 +1,5 @@
+[![CI](https://github.com/Scaraude/realtime-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/Scaraude/realtime-rust/actions/workflows/ci.yml)
+
 # Supabase Realtime Rust 🦀
 
 A Rust client for [Supabase Realtime](https://supabase.com/docs/guides/realtime) - Phoenix Channels WebSocket protocol implementation.
@@ -143,12 +145,14 @@ src/
 ## Development Roadmap
 
 ### Phase 1: Core Infrastructure ✅ COMPLETE
+
 - [x] Project setup
 - [x] Type definitions
 - [x] Error handling
 - [x] Basic client structure
 
 ### Phase 2: WebSocket Implementation ✅ COMPLETE
+
 - [x] WebSocket connection (tokio-tungstenite)
 - [x] Connection state management
 - [x] Concurrent read/write tasks
@@ -157,6 +161,7 @@ src/
 - [x] Message routing and parsing
 
 ### Phase 3: Heartbeat & Reconnection ✅ COMPLETE
+
 - [x] Heartbeat implementation with timeout
 - [x] Heartbeat acknowledgment handling
 - [x] Automatic reconnection logic with exponential backoff
@@ -165,6 +170,7 @@ src/
 - [x] Channel re-subscription after reconnect
 
 ### Phase 4: Channel Implementation ✅ COMPLETE
+
 - [x] Channel creation (client.channel())
 - [x] Subscribe/unsubscribe to channels
 - [x] Event listeners with mpsc channels
@@ -173,6 +179,7 @@ src/
 - [x] HTTP fallback for broadcasts
 
 ### Phase 5: Advanced Features ✅ COMPLETE
+
 - [x] Push messages with acknowledgments
 - [x] Callback registration (ok/error/timeout)
 - [x] Timeout mechanism with tokio
@@ -180,12 +187,14 @@ src/
 - [x] Presence tracking (state sync, joins/leaves, track/untrack)
 
 ### Phase 6: Polish & Open Source Prep (In Progress)
+
 - [ ] Access token refresh
 - [ ] Comprehensive API documentation
 - [ ] CI/CD setup (GitHub Actions)
 - [ ] More examples and use cases
 
 ### Phase 7: Testing & Polish
+
 - [x] Basic connection tests
 - [x] Heartbeat tests
 - [x] Channel subscription tests
@@ -204,6 +213,7 @@ src/
 This project is being ported from [@supabase/realtime-js](https://github.com/supabase/realtime-js).
 
 Key differences:
+
 - **Callbacks → Traits/Channels**: JavaScript callbacks are replaced with Rust traits and async channels
 - **Shared State**: Uses `Arc<RwLock<T>>` for thread-safe shared state
 - **Error Handling**: Uses `Result<T, RealtimeError>` instead of exceptions
