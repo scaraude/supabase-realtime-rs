@@ -9,8 +9,10 @@ pub enum ChannelEvent {
     /// PostgreSQL database changes
     PostgresChanges,
 
-    /// Custom broadcast event
-    Broadcast,
+    /// Broadcast event with optional inner event name
+    /// - `Broadcast(None)` matches all broadcast events
+    /// - `Broadcast(Some("message"))` matches only broadcasts with event="message"
+    Broadcast(Option<String>),
 
     /// Presence tracking events
     PresenceState,
@@ -49,7 +51,7 @@ impl ChannelEvent {
     pub fn parse(s: &str) -> Self {
         match s {
             channel_events::POSTGRES_CHANGES => Self::PostgresChanges,
-            channel_events::BROADCAST => Self::Broadcast,
+            channel_events::BROADCAST => Self::Broadcast(None),
             channel_events::PRESENCE_STATE => Self::PresenceState,
             channel_events::PRESENCE_DIFF => Self::PresenceDiff,
             _ if s.starts_with("phx_") || s == phoenix_events::HEARTBEAT => {
@@ -63,12 +65,24 @@ impl ChannelEvent {
     pub fn as_str(&self) -> &str {
         match self {
             Self::PostgresChanges => channel_events::POSTGRES_CHANGES,
-            Self::Broadcast => channel_events::BROADCAST,
+            Self::Broadcast(_) => channel_events::BROADCAST,
             Self::PresenceState => channel_events::PRESENCE_STATE,
             Self::PresenceDiff => channel_events::PRESENCE_DIFF,
             Self::System(sys) => sys.as_str(),
             Self::Custom(s) => s,
         }
+    }
+
+    /// Create a broadcast event with a specific event name
+    ///
+    /// # Example
+    /// ```
+    /// use supabase_realtime_rs::ChannelEvent;
+    ///
+    /// let event = ChannelEvent::broadcast("message");
+    /// ```
+    pub fn broadcast(event: impl Into<String>) -> Self {
+        Self::Broadcast(Some(event.into()))
     }
 }
 
@@ -192,7 +206,10 @@ mod tests {
             ChannelEvent::parse("postgres_changes"),
             ChannelEvent::PostgresChanges
         );
-        assert_eq!(ChannelEvent::parse("broadcast"), ChannelEvent::Broadcast);
+        assert_eq!(
+            ChannelEvent::parse("broadcast"),
+            ChannelEvent::Broadcast(None)
+        );
         assert_eq!(
             ChannelEvent::parse("presence_state"),
             ChannelEvent::PresenceState

@@ -190,13 +190,25 @@ impl MessageRouter {
     }
 
     /// Routes message to matching channels
-    async fn route_to_channels(&self, message: RealtimeMessage) {
+    async fn route_to_channels(&self, mut message: RealtimeMessage) {
         tracing::debug!(
             "Routing message: topic={}, event={}, payload={}",
             message.topic,
             message.event.as_str(),
             serde_json::to_string(&message.payload).unwrap_or_default()
         );
+
+        // Handle broadcast events: extract inner event name from payload
+        if matches!(message.event, ChannelEvent::Broadcast(None))
+            && let Some(inner_event) = message
+                .payload
+                .get("event")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        {
+            tracing::debug!("Extracted broadcast inner event: {}", inner_event);
+            message.event = ChannelEvent::Broadcast(Some(inner_event));
+        }
 
         let state = self.state.read().await;
         for channel in state.channels.iter() {

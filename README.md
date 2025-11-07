@@ -25,12 +25,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Subscribe to a channel
     let channel = client.channel("room:lobby", Default::default()).await;
-    let mut rx = channel.on(ChannelEvent::Broadcast("message".into())).await;
+    let mut rx = channel.on(ChannelEvent::broadcast("message")).await;
     channel.subscribe().await?;
 
     // Send and receive messages
     channel.send(
-        ChannelEvent::Broadcast("message".into()),
+        ChannelEvent::broadcast("message"),
         serde_json::json!({"text": "Hello!"})
     ).await?;
 
@@ -214,7 +214,7 @@ await channel.subscribe()
 ```rust
 // Rust
 let channel = client.channel("room:lobby", Default::default()).await;
-let mut rx = channel.on(ChannelEvent::Broadcast("message".into())).await;
+let mut rx = channel.on(ChannelEvent::broadcast("message")).await;
 channel.subscribe().await?;
 
 tokio::spawn(async move {

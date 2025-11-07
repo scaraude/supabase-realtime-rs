@@ -95,7 +95,7 @@ impl RealtimeChannel {
     ///
     /// # Arguments
     ///
-    /// * `event` - The event type to listen for (e.g., `ChannelEvent::Broadcast("message")`)
+    /// * `event` - The event type to listen for (e.g., `ChannelEvent::broadcast("message")`)
     ///
     /// # Returns
     ///
@@ -118,7 +118,7 @@ impl RealtimeChannel {
     /// let channel = client.channel("room:lobby", Default::default()).await;
     ///
     /// // Listen for broadcast messages
-    /// let mut rx = channel.on(ChannelEvent::Broadcast("message".into())).await;
+    /// let mut rx = channel.on(ChannelEvent::broadcast("message")).await;
     ///
     /// channel.subscribe().await?;
     ///
@@ -317,7 +317,7 @@ impl RealtimeChannel {
     /// let channel = client.channel("room:lobby", Default::default()).await;
     ///
     /// // Register listeners BEFORE subscribing
-    /// let mut rx = channel.on(ChannelEvent::Broadcast("message".into())).await;
+    /// let mut rx = channel.on(ChannelEvent::broadcast("message")).await;
     ///
     /// // Now subscribe to start receiving events
     /// channel.subscribe().await?;
@@ -478,7 +478,7 @@ impl RealtimeChannel {
     ///
     /// # Arguments
     ///
-    /// * `event` - The broadcast event type (e.g., `ChannelEvent::Broadcast("message")`)
+    /// * `event` - The broadcast event type (e.g., `ChannelEvent::broadcast("message")`)
     /// * `payload` - The message payload as JSON
     ///
     /// # Errors
@@ -505,7 +505,7 @@ impl RealtimeChannel {
     ///
     /// // Send a broadcast message
     /// channel.send(
-    ///     ChannelEvent::Broadcast("message".into()),
+    ///     ChannelEvent::broadcast("message"),
     ///     json!({"text": "Hello, world!", "user": "Alice"})
     /// ).await?;
     /// # Ok(())

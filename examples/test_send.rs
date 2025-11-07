@@ -47,7 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Listen for broadcast events
     println!("✅ Test 4: Registering listener for broadcast events...");
-    let mut broadcast_rx = channel.on("broadcast:chat-message").await;
+    let mut broadcast_rx = channel.on(ChannelEvent::broadcast("chat-message")).await;
 
     tokio::spawn(async move {
         while let Some(payload) = broadcast_rx.recv().await {
@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     channel
         .send(
-            ChannelEvent::Custom(String::from("chat-message")),
+            ChannelEvent::broadcast("chat-message"),
             json!({
                 "user": "alice",
                 "message": "Hello from Rust!"
