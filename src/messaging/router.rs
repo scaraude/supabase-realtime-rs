@@ -200,11 +200,7 @@ impl MessageRouter {
 
         // Handle broadcast events: extract inner event name from payload
         if matches!(message.event, ChannelEvent::Broadcast(None))
-            && let Some(inner_event) = message
-                .payload
-                .get("event")
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
+            && let Some(inner_event) = Self::extract_broadcast_event(&message.payload)
         {
             tracing::debug!("Extracted broadcast inner event: {}", inner_event);
             message.event = ChannelEvent::Broadcast(Some(inner_event));
@@ -223,5 +219,38 @@ impl MessageRouter {
                     .await;
             }
         }
+    }
+
+    fn extract_broadcast_event(payload: &serde_json::Value) -> Option<String> {
+        payload
+            .get("event")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_extract_broadcast_event_with_valid_payload() {
+        let payload = serde_json::json!({"event": "event_name", "paylaod": {}});
+        let event = MessageRouter::extract_broadcast_event(&payload);
+        assert_eq!(event, Some("event_name".to_string()));
+    }
+
+    #[test]
+    fn test_extract_broadcast_event_without_event_field() {
+        let payload = serde_json::json!({ "paylaod": {}});
+        let event = MessageRouter::extract_broadcast_event(&payload);
+        assert_eq!(event, None);
+    }
+
+    #[test]
+    fn test_extract_broadcast_event_with_non_string_event() {
+        let payload = serde_json::json!({ "event": 123, "paylaod": {}});
+        let event = MessageRouter::extract_broadcast_event(&payload);
+        assert_eq!(event, None);
     }
 }
