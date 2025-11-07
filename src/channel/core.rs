@@ -163,7 +163,7 @@ impl RealtimeChannel {
     /// # Example
     ///
     /// ```no_run
-    /// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions, PostgresChangesFilter};
+    /// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions, PostgresChangesFilter, PostgresChangeEvent};
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// # let client = RealtimeClient::new(
@@ -178,7 +178,8 @@ impl RealtimeChannel {
     ///
     /// // Listen for all changes to the "todos" table
     /// let mut rx = channel.on_postgres_changes(
-    ///     PostgresChangesFilter::new("public", "todos")
+    ///     PostgresChangesFilter::new(PostgresChangeEvent::All, "public")
+    ///         .table("todos")
     /// ).await;
     ///
     /// channel.subscribe().await?;

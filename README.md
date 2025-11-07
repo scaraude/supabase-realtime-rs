@@ -79,13 +79,14 @@ serde_json = "1"
 ### Database Changes (Postgres)
 
 ```rust
-use supabase_realtime_rs::PostgresChangesFilter;
+use supabase_realtime_rs::{PostgresChangesFilter, PostgresChangeEvent};
 
 let channel = client.channel("db-changes", Default::default()).await;
 
 // Listen for all changes to the "todos" table
 let mut rx = channel.on_postgres_changes(
-    PostgresChangesFilter::new("public", "todos")
+    PostgresChangesFilter::new(PostgresChangeEvent::All, "public")
+        .table("todos")
 ).await;
 
 channel.subscribe().await?;
