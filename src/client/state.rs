@@ -62,3 +62,30 @@ impl Default for ClientState {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*; // Import items from parent module
+
+    #[test]
+    fn test_make_ref_increments() {
+        let mut state = ClientState::default();
+        assert_eq!(state.ref_counter, 0);
+
+        let ref1 = state.make_ref();
+        assert_eq!(state.ref_counter, 1);
+        assert_eq!(ref1, "1");
+
+        let ref2 = state.make_ref();
+        assert_eq!(state.ref_counter, 2);
+        assert_eq!(ref2, "2");
+
+        assert_ne!(ref1, ref2);
+    }
+
+    #[test]
+    fn test_make_ref_start_at_zero() {
+        let state = ClientState::default();
+        assert_eq!(state.ref_counter, 0);
+    }
+}
