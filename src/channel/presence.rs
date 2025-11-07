@@ -191,3 +191,91 @@ impl Default for Presence {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_presence_is_empty() {
+        let presence = Presence::default();
+        assert!(presence.state.is_empty());
+        assert!(presence.list().is_empty());
+    }
+
+    #[test]
+    fn test_sync_state_detects_new_user() {
+        let mut presence = Presence::default();
+
+        let new_state: RawPresenceState = HashMap::from([(
+            "user-1".to_string(),
+            RawPresenceEntries {
+                metas: vec![RawPresenceMeta {
+                    phx_ref: Some("join-ref".to_string()),
+                    phx_ref_prev: None,
+                    data: HashMap::new(),
+                }],
+            },
+        )]);
+
+        let changes = presence.sync_state(new_state, "join-ref".to_string());
+
+        assert_eq!(changes.joins.len(), 1);
+        assert!(changes.joins.contains_key("user-1"));
+        assert_eq!(changes.leaves.len(), 0);
+
+        assert_eq!(presence.state.len(), 1);
+        assert!(presence.state.contains_key("user-1"));
+    }
+
+    #[test]
+    fn test_pending_sync_state() {
+        let mut presence = Presence::default();
+
+        assert!(presence.in_pending_sync_state(Some("ref1")));
+
+        let raw_state = HashMap::new();
+        presence.sync_state(raw_state, "ref1".to_string());
+
+        assert!(!presence.in_pending_sync_state(Some("ref1")));
+        assert!(presence.in_pending_sync_state(Some("ref2")));
+    }
+
+    #[test]
+    fn test_sync_diff() {
+        let mut presence = Presence::default();
+
+        let new_state: RawPresenceState = HashMap::from([(
+            "user-1".to_string(),
+            RawPresenceEntries {
+                metas: vec![RawPresenceMeta {
+                    phx_ref: Some("join-ref".to_string()),
+                    phx_ref_prev: None,
+                    data: HashMap::new(),
+                }],
+            },
+        )]);
+
+        let diff = RawPresenceDiff {
+            joins: new_state.clone(),
+            leaves: HashMap::new(),
+        };
+
+        let changes = presence.sync_diff(diff);
+
+        assert_eq!(changes.joins.len(), 1);
+        assert!(changes.joins.contains_key("user-1"));
+        assert_eq!(changes.leaves.len(), 0);
+    }
+
+    #[test]
+    fn test_add_pending_diff() {
+        let mut presence = Presence::default();
+        let diff = RawPresenceDiff {
+            joins: HashMap::new(),
+            leaves: HashMap::new(),
+        };
+        presence.add_pending_diff(diff);
+        assert_eq!(presence.pending_diffs.len(), 1);
+    }
+}
