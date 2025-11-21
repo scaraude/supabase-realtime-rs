@@ -69,7 +69,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-supabase-realtime-rs = { git = "https://github.com/Scaraude/realtime-rust" }
+supabase-realtime-rs = "0.1.0"
 tokio = { version = "1", features = ["full"] }
 serde_json = "1"
 ```
