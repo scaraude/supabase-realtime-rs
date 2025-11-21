@@ -1,4 +1,4 @@
-[![CI](https://github.com/Scaraude/realtime-rust/actions/workflows/ci.yml/badge.svg)](https://github.com/Scaraude/realtime-rust/actions/workflows/ci.yml)
+[![CI](https://github.com/Scaraude/supabase-realtime-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/Scaraude/supabase-realtime-rs/actions/workflows/ci.yml)
 
 # Supabase Realtime Rust 🦀
 
