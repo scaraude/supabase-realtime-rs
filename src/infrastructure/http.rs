@@ -55,7 +55,9 @@ impl HttpBroadcaster {
 
         if !response.status().is_success() {
             return Err(RealtimeError::Connection(format!(
-                "HTTP broadcast failed with status: {}",
+                "HTTP broadcast failed for topic '{}' event '{}' with status: {}",
+                topic,
+                event.as_str(),
                 response.status()
             )));
         }

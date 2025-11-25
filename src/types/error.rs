@@ -32,11 +32,11 @@ pub enum RealtimeError {
     UrlParse(#[from] url::ParseError),
 
     /// Operation timed out (e.g., push message acknowledgment not received)
-    #[error("Timeout error")]
-    Timeout,
+    #[error("Operation timed out: {0}")]
+    Timeout(String),
 
     /// Attempted operation while not connected to the server
-    #[error("Not connected")]
+    #[error("Not connected. Call client.connect().await to establish a connection")]
     NotConnected,
 }
 
