@@ -47,7 +47,7 @@ impl PostgresChangesFilter {
         map.insert(
             "event".to_string(),
             serde_json::to_string(&self.event)
-                .unwrap()
+                .expect("Failed to serialize event to string")
                 .replace("\"", ""),
         );
         map.insert("schema".to_string(), self.schema.clone());

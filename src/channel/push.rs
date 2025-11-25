@@ -43,14 +43,18 @@ impl Push {
     {
         self.callbacks
             .lock()
-            .unwrap()
+            .expect(
+                "callback mutex poisoned - this indicates memory corruption. Restart the program.",
+            )
             .insert(status.to_string(), Arc::new(callback));
         self
     }
 
     pub fn trigger(&self, status: &str, payload: Value) {
         let opt_callback = {
-            let callbacks = self.callbacks.lock().unwrap();
+            let callbacks = self.callbacks.lock().expect(
+                "callback mutex poisoned - this indicates memory corruption. Restart the program.",
+            );
             callbacks.get(status).cloned() // Clone the Arc'd function
         }; // Lock released here
 
