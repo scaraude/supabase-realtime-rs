@@ -159,6 +159,10 @@ cargo run --example test_presence         # Presence tracking
 cargo run --example test_push             # Push with acknowledgments
 ```
 
+### Real-World Demo
+
+Check out [**realtime-chat-demo**](https://github.com/scaraude/realtime-chat-demo) - a full-featured chat application built with this library, demonstrating broadcast messaging, presence tracking, and WebSocket connection management.
+
 ## Production Readiness
 
 ### Status: Beta (v0.1.0)
