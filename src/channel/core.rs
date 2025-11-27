@@ -1,19 +1,16 @@
 use super::{
     Push,
-    config::{
-        BroadcastConfig, ChannelJoinConfig, JoinPayload, PostgresChangesPayload, PostgresEventType,
-        PresenceConfig,
-    },
-    state::{ChannelState, ChannelStatus, EventBinding},
+    config::{BroadcastConfig, ChannelJoinConfig, JoinPayload, PresenceConfig},
+    postgres_changes::{PostgresChangesFilter, PostgresChangesPayload},
+    state::{ChannelState, ChannelStatus, EventBinding, EventPayload},
 };
+use crate::infrastructure::HttpBroadcaster;
 use crate::types::Result;
 use crate::{RealtimeMessage, SystemEvent};
-use crate::{channel::PostgresChangesFilter, infrastructure::HttpBroadcaster};
 use crate::{channel::PresenceMeta, messaging::ChannelEvent};
 use crate::{client::RealtimeClient, types::DEFAULT_TIMEOUT};
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{RwLock, mpsc};
-
 /// Configuration options for a realtime channel.
 ///
 /// These options control broadcasting behavior, presence tracking, and access control.
@@ -99,12 +96,12 @@ impl RealtimeChannel {
     ///
     /// # Returns
     ///
-    /// Returns an `mpsc::Receiver<serde_json::Value>` that receives event payloads.
+    /// Returns an `mpsc::Receiver<EventPayload>` that receives typed event payloads.
     ///
     /// # Example
     ///
     /// ```no_run
-    /// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions, ChannelEvent};
+    /// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions, ChannelEvent, EventPayload};
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// # let client = RealtimeClient::new(
@@ -125,13 +122,16 @@ impl RealtimeChannel {
     /// // Spawn a task to process events
     /// tokio::spawn(async move {
     ///     while let Some(payload) = rx.recv().await {
-    ///         println!("Received message: {:?}", payload);
+    ///         match payload {
+    ///             EventPayload::Broadcast(data) => println!("Broadcast: {:?}", data),
+    ///             _ => {}
+    ///         }
     ///     }
     /// });
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn on(&self, event: impl Into<ChannelEvent>) -> mpsc::Receiver<serde_json::Value> {
+    pub async fn on(&self, event: impl Into<ChannelEvent>) -> mpsc::Receiver<EventPayload> {
         let (tx, rx) = mpsc::channel(100);
         let binding = EventBinding {
             event: event.into(),
@@ -158,12 +158,12 @@ impl RealtimeChannel {
     ///
     /// # Returns
     ///
-    /// Returns an `mpsc::Receiver<serde_json::Value>` that receives change payloads.
+    /// Returns an `mpsc::Receiver<PostgresChangesPayload>` that receives typed change payloads.
     ///
     /// # Example
     ///
     /// ```no_run
-    /// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions, PostgresChangesFilter, PostgresChangeEvent};
+    /// use supabase_realtime_rs::{RealtimeClient, RealtimeClientOptions, PostgresChangesFilter, PostgresChangeEvent, PostgresChangesPayload};
     ///
     /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
     /// # let client = RealtimeClient::new(
@@ -186,7 +186,11 @@ impl RealtimeChannel {
     ///
     /// tokio::spawn(async move {
     ///     while let Some(change) = rx.recv().await {
-    ///         println!("Database change: {:?}", change);
+    ///         match change {
+    ///             PostgresChangesPayload::Insert(payload) => println!("New row: {:?}", payload.new),
+    ///             PostgresChangesPayload::Update(payload) => println!("Updated: {:?}", payload.new),
+    ///             PostgresChangesPayload::Delete(payload) => println!("Deleted: {:?}", payload.old),
+    ///         }
     ///     }
     /// });
     /// # Ok(())
@@ -195,17 +199,30 @@ impl RealtimeChannel {
     pub async fn on_postgres_changes(
         &self,
         filter: PostgresChangesFilter,
-    ) -> mpsc::Receiver<serde_json::Value> {
-        let (tx, rx) = mpsc::channel(100);
+    ) -> mpsc::Receiver<PostgresChangesPayload> {
+        let (event_tx, mut event_rx) = mpsc::channel::<EventPayload>(100);
+        let (pg_tx, pg_rx) = mpsc::channel::<PostgresChangesPayload>(100);
+
         let binding = EventBinding {
             event: ChannelEvent::PostgresChanges,
             filter: Some(filter.to_hash_map()),
-            sender: tx,
+            sender: event_tx,
         };
 
         self.state.write().await.bindings.push(binding);
 
-        rx
+        // Spawn a task to filter and extract PostgresChanges payloads
+        tokio::spawn(async move {
+            while let Some(payload) = event_rx.recv().await {
+                if let EventPayload::PostgresChanges(pg_payload) = payload
+                    && pg_tx.send(pg_payload).await.is_err()
+                {
+                    break; // Receiver dropped
+                }
+            }
+        });
+
+        pg_rx
     }
 
     fn matches_postgres_filter(
@@ -221,22 +238,22 @@ impl RealtimeChannel {
                         continue;
                     }
                     // Map filter "event" key to payload.data.type field
-                    let event_str = match payload.data.event_type {
-                        PostgresEventType::Insert => "INSERT",
-                        PostgresEventType::Update => "UPDATE",
-                        PostgresEventType::Delete => "DELETE",
+                    let event_str = match payload {
+                        PostgresChangesPayload::Insert(_) => "INSERT",
+                        PostgresChangesPayload::Update(_) => "UPDATE",
+                        PostgresChangesPayload::Delete(_) => "DELETE",
                     };
                     if event_str != value {
                         return false;
                     }
                 }
                 "schema" => {
-                    if &payload.data.schema != value {
+                    if payload.schema() != value {
                         return false;
                     }
                 }
                 "table" => {
-                    if &payload.data.table != value {
+                    if payload.table() != value {
                         return false;
                     }
                 }
@@ -250,30 +267,19 @@ impl RealtimeChannel {
     }
 
     /// Internal method to trigger events to registered listeners
-    pub(crate) async fn _trigger(&self, event: ChannelEvent, payload: serde_json::Value) {
+    pub(crate) async fn _trigger(&self, event: ChannelEvent, payload: EventPayload) {
         let event_enum = ChannelEvent::parse(event.as_str());
         let state = self.state.read().await;
 
         for binding in state.bindings.iter() {
             if binding.event == event_enum {
+                // Apply postgres_changes filters if applicable
                 if event_enum == ChannelEvent::PostgresChanges
                     && let Some(filters) = &binding.filter
+                    && let EventPayload::PostgresChanges(ref pg_payload) = payload
+                    && !self.matches_postgres_filter(filters, pg_payload)
                 {
-                    // Deserialize payload to typed struct for filtering
-                    match serde_json::from_value::<PostgresChangesPayload>(payload.clone()) {
-                        Ok(typed_payload) => {
-                            if !self.matches_postgres_filter(filters, &typed_payload) {
-                                continue;
-                            }
-                        }
-                        Err(e) => {
-                            tracing::warn!(
-                                "Failed to deserialize postgres_changes payload: {}. Skipping filter.",
-                                e
-                            );
-                            continue;
-                        }
-                    }
+                    continue;
                 }
                 if let Err(e) = binding.sender.send(payload.clone()).await {
                     tracing::warn!(

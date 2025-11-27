@@ -1,6 +1,8 @@
 use super::push::Push;
+use crate::channel::PostgresChangesPayload;
 use crate::channel::presence::Presence;
 use crate::messaging::ChannelEvent;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -15,12 +17,29 @@ pub enum ChannelStatus {
     Leaving,
 }
 
+/// Typed event payloads for different channel events
+#[derive(Debug, Clone, Serialize)]
+pub enum EventPayload {
+    /// Postgres database change events (INSERT, UPDATE, DELETE)
+    PostgresChanges(PostgresChangesPayload),
+    /// Broadcast messages (user-defined pub/sub)
+    Broadcast(serde_json::Value),
+    /// Presence state (full list of present users)
+    PresenceState(serde_json::Value),
+    /// Presence diff (joins/leaves)
+    PresenceDiff(serde_json::Value),
+    /// System events (replies, errors, etc.)
+    System(serde_json::Value),
+    /// Custom user-defined events
+    Custom(serde_json::Value),
+}
+
 /// Event binding for channel event listeners
 #[derive(Debug)]
 pub struct EventBinding {
     pub event: ChannelEvent,
     pub filter: Option<HashMap<String, String>>,
-    pub sender: mpsc::Sender<serde_json::Value>,
+    pub sender: mpsc::Sender<EventPayload>,
 }
 
 /// Mutable state for a RealtimeChannel

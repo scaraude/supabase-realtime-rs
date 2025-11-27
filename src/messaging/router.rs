@@ -1,6 +1,6 @@
 use super::SystemEvent;
 use crate::ChannelEvent;
-use crate::channel::{RawPresenceDiff, RawPresenceState};
+use crate::channel::{EventPayload, PostgresChangesPayload, RawPresenceDiff, RawPresenceState};
 use crate::client::ClientState;
 use crate::types::constants::PHOENIX_TOPIC;
 use crate::types::message::RealtimeMessage;
@@ -189,6 +189,33 @@ impl MessageRouter {
         true
     }
 
+    /// Converts raw JSON payload to typed EventPayload based on event type
+    fn payload_to_event_payload(event: &ChannelEvent, payload: serde_json::Value) -> EventPayload {
+        match event {
+            ChannelEvent::PostgresChanges => {
+                // Extract the nested "data" field which contains the actual postgres changes
+                let data_payload = payload.get("data").cloned().unwrap_or(payload.clone());
+                match serde_json::from_value::<PostgresChangesPayload>(data_payload) {
+                    Ok(pg_payload) => EventPayload::PostgresChanges(pg_payload),
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to parse postgres_changes payload: {}. Payload: {}",
+                            e,
+                            serde_json::to_string(&payload).unwrap_or_default()
+                        );
+                        // Fallback to raw JSON
+                        EventPayload::Custom(payload)
+                    }
+                }
+            }
+            ChannelEvent::Broadcast(_) => EventPayload::Broadcast(payload),
+            ChannelEvent::PresenceState => EventPayload::PresenceState(payload),
+            ChannelEvent::PresenceDiff => EventPayload::PresenceDiff(payload),
+            ChannelEvent::System(_) => EventPayload::System(payload),
+            ChannelEvent::Custom(_) => EventPayload::Custom(payload),
+        }
+    }
+
     /// Routes message to matching channels
     async fn route_to_channels(&self, mut message: RealtimeMessage) {
         tracing::debug!(
@@ -206,6 +233,9 @@ impl MessageRouter {
             message.event = ChannelEvent::Broadcast(Some(inner_event));
         }
 
+        // Convert JSON payload to typed EventPayload
+        let event_payload = Self::payload_to_event_payload(&message.event, message.payload.clone());
+
         let state = self.state.read().await;
         for channel in state.channels.iter() {
             if channel.topic() == message.topic {
@@ -215,7 +245,7 @@ impl MessageRouter {
                     channel.topic()
                 );
                 channel
-                    ._trigger(message.event.clone(), message.payload.clone())
+                    ._trigger(message.event.clone(), event_payload.clone())
                     .await;
             }
         }

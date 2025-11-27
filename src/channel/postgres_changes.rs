@@ -62,46 +62,116 @@ impl PostgresChangesFilter {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ColumnInfo {
+    pub name: String,
+    #[serde(rename = "type")]
+    pub column_type: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PostgresChangesPayloadBase {
     pub schema: String,
     pub table: String,
     pub commit_timestamp: String,
     #[serde(default)]
-    pub errors: Vec<String>,
+    pub errors: Option<Vec<String>>,
+    #[serde(default)]
+    pub columns: Vec<ColumnInfo>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+// Internal struct for deserializing server format
+#[derive(Deserialize, Debug)]
+struct PostgreInsertPayloadRaw {
+    #[serde(flatten)]
+    base: PostgresChangesPayloadBase,
+    #[serde(default)]
+    record: HashMap<String, Value>,
+}
+
+#[derive(Serialize, Debug, Clone)]
 pub struct PostgreInsertPayload {
     #[serde(flatten)]
     pub base: PostgresChangesPayloadBase,
-    #[serde(default)]
     pub new: HashMap<String, Value>,
-    #[serde(default)]
-    pub old: HashMap<String, Value>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+impl<'de> Deserialize<'de> for PostgreInsertPayload {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = PostgreInsertPayloadRaw::deserialize(deserializer)?;
+        Ok(PostgreInsertPayload {
+            base: raw.base,
+            new: raw.record,
+        })
+    }
+}
+
+// Internal struct for deserializing server format
+#[derive(Deserialize, Debug)]
+struct PostgresUpdatePayloadRaw {
+    #[serde(flatten)]
+    base: PostgresChangesPayloadBase,
+    #[serde(default)]
+    record: HashMap<String, Value>,
+    #[serde(default)]
+    old_record: HashMap<String, Value>,
+}
+
+#[derive(Serialize, Debug, Clone)]
 pub struct PostgresUpdatePayload {
     #[serde(flatten)]
     pub base: PostgresChangesPayloadBase,
-    #[serde(default)]
     pub new: HashMap<String, Value>,
-    #[serde(default)]
     pub old: HashMap<String, Value>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+impl<'de> Deserialize<'de> for PostgresUpdatePayload {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = PostgresUpdatePayloadRaw::deserialize(deserializer)?;
+        Ok(PostgresUpdatePayload {
+            base: raw.base,
+            new: raw.record,
+            old: raw.old_record,
+        })
+    }
+}
+
+// Internal struct for deserializing server format
+#[derive(Deserialize, Debug)]
+struct PostgresDeletePayloadRaw {
+    #[serde(flatten)]
+    base: PostgresChangesPayloadBase,
+    #[serde(default)]
+    old_record: HashMap<String, Value>,
+}
+
+#[derive(Serialize, Debug, Clone)]
 pub struct PostgresDeletePayload {
     #[serde(flatten)]
     pub base: PostgresChangesPayloadBase,
-    #[serde(default)]
-    pub new: HashMap<String, Value>,
-    #[serde(default)]
     pub old: HashMap<String, Value>,
 }
 
+impl<'de> Deserialize<'de> for PostgresDeletePayload {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = PostgresDeletePayloadRaw::deserialize(deserializer)?;
+        Ok(PostgresDeletePayload {
+            base: raw.base,
+            old: raw.old_record,
+        })
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(tag = "eventType", rename_all = "UPPERCASE")]
+#[serde(tag = "type", rename_all = "UPPERCASE")]
 pub enum PostgresChangesPayload {
     Insert(PostgreInsertPayload),
     Update(PostgresUpdatePayload),
@@ -130,6 +200,120 @@ impl PostgresChangesPayload {
             Self::Insert(payload) => &payload.base.commit_timestamp,
             Self::Update(payload) => &payload.base.commit_timestamp,
             Self::Delete(payload) => &payload.base.commit_timestamp,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_deserialize_insert_payload_from_server_format() {
+        // This is the actual format sent by Supabase server
+        let json = r#"{
+            "columns": [
+                {"name": "id", "type": "int8"},
+                {"name": "created_at", "type": "timestamptz"},
+                {"name": "name", "type": "text"}
+            ],
+            "commit_timestamp": "2025-11-27T16:16:54.545Z",
+            "errors": null,
+            "record": {
+                "created_at": "2025-11-27T16:16:54.541196+00:00",
+                "id": 47,
+                "name": "jena"
+            },
+            "schema": "public",
+            "table": "users",
+            "type": "INSERT"
+        }"#;
+
+        let payload: PostgresChangesPayload = serde_json::from_str(json).unwrap();
+
+        match payload {
+            PostgresChangesPayload::Insert(insert) => {
+                assert_eq!(insert.base.schema, "public");
+                assert_eq!(insert.base.table, "users");
+                assert_eq!(insert.base.columns.len(), 3);
+                assert_eq!(insert.new.get("name").unwrap().as_str().unwrap(), "jena");
+                assert_eq!(insert.new.get("id").unwrap().as_i64().unwrap(), 47);
+            }
+            _ => panic!("Expected Insert variant"),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_update_payload_from_server_format() {
+        let json = r#"{
+            "columns": [
+                {"name": "id", "type": "int8"},
+                {"name": "name", "type": "text"}
+            ],
+            "commit_timestamp": "2025-11-27T16:20:00.000Z",
+            "errors": null,
+            "record": {
+                "id": 47,
+                "name": "new_name"
+            },
+            "old_record": {
+                "id": 47,
+                "name": "old_name"
+            },
+            "schema": "public",
+            "table": "users",
+            "type": "UPDATE"
+        }"#;
+
+        let payload: PostgresChangesPayload = serde_json::from_str(json).unwrap();
+
+        match payload {
+            PostgresChangesPayload::Update(update) => {
+                assert_eq!(update.base.schema, "public");
+                assert_eq!(update.base.table, "users");
+                assert_eq!(
+                    update.new.get("name").unwrap().as_str().unwrap(),
+                    "new_name"
+                );
+                assert_eq!(
+                    update.old.get("name").unwrap().as_str().unwrap(),
+                    "old_name"
+                );
+            }
+            _ => panic!("Expected Update variant"),
+        }
+    }
+
+    #[test]
+    fn test_deserialize_delete_payload_from_server_format() {
+        let json = r#"{
+            "columns": [
+                {"name": "id", "type": "int8"},
+                {"name": "name", "type": "text"}
+            ],
+            "commit_timestamp": "2025-11-27T16:25:00.000Z",
+            "errors": null,
+            "old_record": {
+                "id": 47,
+                "name": "deleted_name"
+            },
+            "schema": "public",
+            "table": "users",
+            "type": "DELETE"
+        }"#;
+
+        let payload: PostgresChangesPayload = serde_json::from_str(json).unwrap();
+
+        match payload {
+            PostgresChangesPayload::Delete(delete) => {
+                assert_eq!(delete.base.schema, "public");
+                assert_eq!(delete.base.table, "users");
+                assert_eq!(
+                    delete.old.get("name").unwrap().as_str().unwrap(),
+                    "deleted_name"
+                );
+            }
+            _ => panic!("Expected Delete variant"),
         }
     }
 }
